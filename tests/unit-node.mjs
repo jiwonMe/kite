@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { scene, $, ensure, encourage, ops, Op, ConstraintKind } from '../kite.js';
+import { scene, $, ensure, encourage, ops, Op, ConstraintKind, rgba, none } from '../kite.js';
 
 let count = 0;
 function test(name, fn) {
@@ -203,6 +203,95 @@ test('Dynamic exponent is rejected with a useful error', () => {
   const a = s.input({ init: 2 });
   const b = s.input({ init: 3 });
   assert.throws(() => $`${a} ^ ${b}`, /exponent must be a numeric literal/);
+});
+
+test('rgba() / none() produce CSS colors and validate input', () => {
+  const s = scene();
+  const c = s.circle({ fill: rgba(1, 0.4, 0.4, 1), stroke: none() });
+  const sh = c.__kiteShape;
+  assert.equal(sh.common.fill.r, 1);
+  assert.equal(sh.common.stroke.none, true);
+  assert.throws(() => s.circle({ fill: 42 }), /color must be/);
+  assert.deepEqual([rgba(2, -1, 0.5).r, rgba(2, -1, 0.5).g], [1, 0]);
+});
+
+test('Ellipse, Image, Equation and Group shapes are created', () => {
+  const s = scene();
+  const e = s.ellipse({ center: [0, 0], rx: 50, ry: 25, fillColor: rgba(0, 0, 0, 1) });
+  const im = s.image({ href: 'data:image/svg+xml,<svg/>', center: [0, 0], width: 40, height: 20 });
+  const eq = s.equation({ center: [0, 0], string: 'H_2O' });
+  const g = s.group({ shapes: [e, im], opacity: 0.1, style: 'filter:blur(5px);' });
+  assert.equal(e.rx, 50);
+  assert.equal(im.href.startsWith('data:'), true);
+  assert.equal(eq.string, 'H_2O');
+  assert.equal(e.__kiteShape.parent, g.__kiteShape);
+  assert.equal(g.__kiteShape.members.length, 2);
+  assert.equal(g.__kiteShape.common.style, 'filter:blur(5px);');
+  assert.throws(() => s.group({ shapes: [e] }), /already belongs/);
+  assert.throws(() => s.image({}), /href is required/);
+});
+
+test('override() replaces style and geometry; later rules win', () => {
+  const s = scene();
+  const Atom = s.type('Atom');
+  const H = s.type('Hydrogen', Atom);
+  const icons = new Map();
+  H({});
+  s.forall({ a: Atom }, ({ a }) => {
+    icons.set(a.id, s.circle({ r: 25, fill: 'white' }));
+  });
+  s.forall({ a: H }, ({ a }) => {
+    s.override(icons.get(a.id), { fillColor: rgba(0.8, 0.8, 0.8), r: 0.75 * 25 });
+  });
+  s.step();
+  const sh = [...icons.values()][0].__kiteShape;
+  assert.equal(sh.r, 18.75);
+  assert.equal(sh.common.fill.r, 0.8);
+  assert.throws(() => s.override([...icons.values()][0], { bogus: 1 }), /unsupported property/);
+  assert.throws(() => s.override([...icons.values()][0], { rx: 1 }), /no "rx"/);
+});
+
+test('collect() gathers all matches once and re-runs when the set grows', () => {
+  const s = scene();
+  const Node = s.type('Node');
+  const shadows = new Map();
+  Node({});
+  Node({});
+  s.forall({ n: Node }, ({ n }) => {
+    shadows.set(n.id, s.ellipse({ rx: 10, ry: 5 }));
+  });
+  const runs = [];
+  s.collect(Node, (n) => shadows.get(n.id), (list) => {
+    runs.push(list.length);
+    s.group({ shapes: list, opacity: 0.1 });
+  });
+  s.step();
+  assert.deepEqual(runs, [2]);
+  s.step();
+  assert.deepEqual(runs, [2]); // unchanged set: no re-run
+  Node({});
+  s.step();
+  assert.deepEqual(runs, [2, 3]);
+  const groups = s.shapes.filter((x) => x.kind === 'group');
+  assert.equal(groups.length, 1, 'old group was replaced');
+  assert.equal(groups[0].members.length, 3);
+});
+
+test('normsq, angleBetween, toRadians and atan2 are differentiable expressions', () => {
+  const s = scene();
+  const a = [s.input({ init: 0 }), s.input({ init: 0 })];
+  const b = [s.input({ init: 1 }), s.input({ init: 0 })];
+  const c = [s.input({ init: 0 }), s.input({ init: 2 })];
+  const u = ops.vsub(b, a);
+  const v = ops.vsub(c, a);
+  assert.equal(value(s, ops.normsq(v)), 4);
+  assert.ok(Math.abs(value(s, ops.angleBetween(u, v)) - Math.PI / 2) < 1e-12);
+  assert.ok(Math.abs(value(s, ops.angleFrom(v, u)) + Math.PI / 2) < 1e-12);
+  assert.ok(Math.abs(ops.toRadians(104.5) - (104.5 * Math.PI) / 180) < 1e-15);
+  assert.ok(Math.abs(value(s, $`toRadians(180)`) - Math.PI) < 1e-12);
+  assert.ok(Math.abs(value(s, $`atan2(1, 1)`) - Math.PI / 4) < 1e-12);
+  assert.equal(value(s, ops.equal(ops.normsq(v), 4)), 0);
+  assert.equal(s.tape.opcode(ops.atan2(1, 1).nodeId), Op.ATAN2);
 });
 
 console.log(`\n${count} unit tests passed`);

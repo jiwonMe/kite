@@ -106,7 +106,7 @@ export PLAYWRIGHT_CORE="/path/to/playwright-core/index.mjs"
 5. **Spatial hash stress (보조)** — 36개 원, 630개 `disjoint` 쌍.
    32쌍 초과 시 균일 격자 광역 단계가 활성 쌍만 XPBD에 투입하는지 검증.
 
-현재 결과: **단위 테스트 11개 + 브라우저 인수 검증 47개 통과.**
+현재 결과: **단위 테스트 16개 + 브라우저 인수 검증 56개 통과.**
 
 ---
 
@@ -253,6 +253,11 @@ kite.js
 - XPBD 제약은 `C <= 0`으로 작성됩니다. 내부적으로 부등식은 `C' = -C >= 0`으로 취급해
   비음수 라그랑주 승수(`λ = max(0, λ + Δλ)`)와 일치시킵니다.
   덕분에 `contains`/`disjoint`가 위반 시 올바른 방향(내부로/외부로)으로 사영됩니다.
+- `encourage()` 소프트 제약은 람다가 매 프레임 초기화되는 프레임 단위 목표이므로
+  `α̃ = α · S / Δt²`로 정규화합니다(`S`는 제약 기울기의 가중 노름제곱). 이렇게 하면 거리(px)와
+  각도(rad) 목표가 단위와 무관하게 같은 비율로 이완됩니다.
+- 소프트 제약만 있는 장면도 프레임 최대 변위가 `1e-2` 미만이 되면 수면 모드로 들어갑니다.
+- 워밍스타트 반발은 고정된 도형(예: 캔버스 크기 배경 이미지)과 같은 중심을 공유하는 도형 쌍을 건너뜁니다.
 - 마우스 타깃은 프레임마다 갱신되는 **프레임 단위 소프트 제약**이므로
   `α̃_drag = α_drag / Δt²`로 정규화합니다(`α_drag = 1e-4`, 유한 컴플라이언스).
   서브스텝 타임스텝으로 정규화하면 K=12에서 유효 컴플라이언스가 52배 커져,
@@ -268,21 +273,45 @@ kite.js
 - JS 32-bit 비트 연산을 사용하므로 장면당 도메인 타입은 최대 30개입니다.
 - `^` 거듭제곱은 정수 지수와 `0.5`만 지원합니다(테이프 opcode에 범용 POW가 없기 때문).
   동적 지수는 명시적 오류를 던집니다.
-- SVG 렌더러는 circle / line(+arrow) / rect / text만 패치합니다.
 - 레이아웃은 XPBD 위치 기반 솔버이며 속도/관성은 모델링하지 않습니다.
 
 ---
 
-## Structural formula example
+## Penrose 스타일 기능
 
-[`examples/caffeine.html`](./examples/caffeine.html)는 Penrose의 structural-formula 예제를
-Kite API로 옮긴 것입니다. `Node <: Atom <: Carbon/Nitrogen/Oxygen/Hydrogen` 계층,
-`SingleBond` / `DoubleBond` / `IonicBond` / `Contains` 술어, 24개 원자와 25개 결합,
-세 개의 메틸기 `FunctionalGroup` 박스를 포함합니다.
+Penrose Style 프로그램을 규칙 단위로 옮길 수 있도록 다음을 지원합니다.
 
-현재 Kite의 도형 집합은 Circle / Line / Rect / Text이므로 Penrose의 `Image`, `Ellipse`,
-`Equation`, `Group` + CSS filter, 스타일 `override`, 상대 레이어(`above`/`below`),
-Trio 텍스트 파서는 지원하지 않습니다. 의미 구조와 기하는 JS API로 직접 선언할 수 있습니다.
+| Penrose | Kite |
+| --- | --- |
+| `Image { href, width, height, preserveAspectRatio }` | `s.image({...})` |
+| `Ellipse { rx, ry }` | `s.ellipse({...})` |
+| `Equation { string }` | `s.equation({...})` — 의존성 없는 TeX 부분집합(`_`, `^`, `{}`, `\frac`, `\mathrm`, 그리스 문자) |
+| `Rectangle { cornerRadius }` | `s.rect({ cornerRadius })` |
+| `Group { shapes, opacity, style: "filter:blur(5px);" }` | `s.group({...})` |
+| `collect Node n into nodes { … }` | `s.collect(Node, n => …, list => …)` — 매치 집합이 커지면 `step()`에서 재실행 |
+| `override x.icon.fillColor = …` | `s.override(handle, { fillColor, r, … })` |
+| `rgba(r, g, b, a)` (0..1), `none()` | `rgba()`, `none()` export |
+| `fillColor` / `strokeColor` / `strokeLinecap` / `style: "dashed"` | 동일 이름의 props |
+| `angleBetween`, `toRadians`, `normsq`, `equal` | `ops.angleBetween`, `ops.toRadians`, `ops.normsq`, `ops.equal` (+ `angleFrom`, `atan2`, `cross`, `rot90`, `distsq`, `toDegrees`) |
+
+`angleBetween`은 `atan2(|u×v|, u·v)`로 계산합니다. 이를 위해 opcode `ATAN2 = 14`를
+추가했습니다(기존 0–13 불변). 기울기는 수치 미분과 일치함을 확인했습니다.
+`$` 템플릿 안에서도 `toRadians(…)`, `toDegrees(…)`, `atan2(…, …)`를 쓸 수 있습니다.
+
+### 예제
+
+- [`examples/structural-formula.html`](./examples/structural-formula.html) — Penrose
+  structural-formula 트리오의 규칙 단위 포트. 원자 좌표는 자유 변수이고 결합 길이·물 결합각·반발을
+  `encourage`로 풉니다. H₂O / NaCl을 런타임에 추가할 수 있습니다.
+- [`examples/caffeine.html`](./examples/caffeine.html) — 고정 좌표의 단순 버전.
+
+### 포팅 시 차이
+
+- 상대 레이어(`layer a above b`)는 숫자 `layer`로 옮깁니다.
+- `where x has label`은 `forall` body 안의 `if (!x.label) return;`으로 씁니다.
+- `encourage equal(200000/normsq(x1-x2), 0)` 같은 1/r² 반발은 XPBD 소프트 제약에서
+  강성이 폭발하므로 최소 거리 부등식(`norm ≥ d`)으로 바꾸는 것을 권장합니다.
+- Trio 텍스트(`.domain`/`.style`/`.substance`) 파서는 없습니다. JS API로 선언합니다.
 
 ## Penrose 레퍼런스
 
@@ -301,6 +330,8 @@ kite.min.js              esbuild로 minify한 배포용 단일 파일
 kite.d.ts                TypeScript 선언
 index.html               인터랙티브 데모
 examples/*.js            추가 예시 6개 (사인, 상자, 링크, 직각, 렌즈, 구슬)
+examples/structural-formula.{html,js}  Penrose structural-formula 포트
+examples/caffeine.html   고정 좌표 caffeine 예제
 tests/unit-node.mjs      DOM 없는 단위 테스트
 tests/acceptance.html    RFC 4개 인수 시나리오
 tests/run.mjs            Playwright 드라이버

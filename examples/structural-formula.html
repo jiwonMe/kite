@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kite — structural-formula (Penrose port)</title>
+    <style>
+      :root {
+        --ink: #111827;
+        --muted: #667085;
+        --faint: #98a2b3;
+        --line: #e4e7ec;
+        --paper: #f6f8fb;
+        --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        --sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+      .shell { max-width: 1240px; margin: 0 auto; padding: 0 32px; }
+      header { padding: 26px 0 8px; display: flex; justify-content: space-between; align-items: center; }
+      .brand { display: flex; gap: 10px; align-items: center; font-weight: 650; text-decoration: none; color: inherit; }
+      .mark { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: var(--ink); color: #fff; transform: rotate(-4deg); }
+      nav a { color: var(--muted); font-size: 13px; text-decoration: none; margin-left: 20px; }
+      .layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 28px; padding: 34px 0 60px; align-items: start; }
+      h1 { margin: 0 0 8px; font-family: var(--serif); font-weight: 500; font-size: 44px; letter-spacing: -0.04em; }
+      .lede { margin: 0 0 20px; color: var(--muted); font-size: 14px; line-height: 1.65; max-width: 64ch; }
+      .stage { background: #fff; border: 1px solid var(--line); border-radius: 20px; overflow: hidden; box-shadow: 0 24px 70px rgba(16,24,40,.08); }
+      .stage-head { display: flex; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #edf0f4; font-family: var(--mono); font-size: 10.5px; color: var(--faint); }
+      #stage svg { display: block; width: 100%; height: auto; }
+      #stage text { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
+      .side { display: grid; gap: 14px; position: sticky; top: 20px; }
+      .panel { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 16px 18px; }
+      .panel h2 { margin: 0 0 10px; font-size: 13px; }
+      .map { display: grid; gap: 7px; font-size: 12px; }
+      .map div { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding-bottom: 7px; border-bottom: 1px solid #f1f3f7; }
+      .map div:last-child { border: 0; padding: 0; }
+      .map code { font-family: var(--mono); font-size: 10.5px; }
+      .map .p { color: #7c3aed; }
+      .map .k { color: #2f5de3; }
+      .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+      .stat { border: 1px solid #eef1f5; border-radius: 10px; padding: 9px 10px; }
+      .stat b { display: block; font-family: var(--mono); font-size: 14px; }
+      .stat span { font-size: 10px; color: var(--faint); text-transform: uppercase; letter-spacing: .05em; }
+      .row { display: flex; gap: 8px; margin-top: 12px; }
+      button { font: inherit; font-size: 12px; font-weight: 600; padding: 8px 12px; border-radius: 9px; border: 1px solid var(--line); background: #fff; cursor: pointer; }
+      button.primary { background: var(--ink); color: #fff; border-color: var(--ink); }
+      .note { font-size: 11.5px; color: var(--muted); line-height: 1.6; margin: 0; }
+      @media (max-width: 980px) { .layout { grid-template-columns: 1fr; } .side { position: static; } }
+    </style>
+  </head>
+  <body>
+    <header class="shell">
+      <a class="brand" href="../index.html"><span class="mark">◇</span> Kite</a>
+      <nav>
+        <a href="../index.html">Playground</a>
+        <a href="caffeine.html">Caffeine (simple)</a>
+        <a href="https://github.com/penrose/penrose/tree/main/packages/examples/src/structural-formula">Penrose source</a>
+      </nav>
+    </header>
+
+    <main class="shell layout">
+      <section>
+        <h1>structural-formula, ported.</h1>
+        <p class="lede">
+          Penrose의 structural-formula Domain·Style·Substance를 규칙 단위로 옮긴 예제입니다. 원자 좌표는
+          자유 변수이고, 결합 길이·물 결합각·반발은 Penrose와 같은 <code>encourage</code> 목표로 XPBD 솔버가 풉니다.
+        </p>
+        <div class="stage">
+          <div class="stage-head"><span>caffeine.substance · structural-formula.style</span><span id="status">solving…</span></div>
+          <div id="stage"></div>
+        </div>
+      </section>
+
+      <aside class="side">
+        <div class="panel">
+          <h2>이번에 추가된 기능</h2>
+          <div class="map">
+            <div><code class="p">Image { href }</code><code class="k">s.image()</code></div>
+            <div><code class="p">Ellipse { rx, ry }</code><code class="k">s.ellipse()</code></div>
+            <div><code class="p">Equation { string }</code><code class="k">s.equation()</code></div>
+            <div><code class="p">collect … into</code><code class="k">s.collect()</code></div>
+            <div><code class="p">Group { style: blur }</code><code class="k">s.group()</code></div>
+            <div><code class="p">override x.y = …</code><code class="k">s.override()</code></div>
+            <div><code class="p">rgba() / none()</code><code class="k">rgba() / none()</code></div>
+            <div><code class="p">angleBetween</code><code class="k">ops.angleBetween</code></div>
+            <div><code class="p">toRadians / normsq</code><code class="k">ops.toRadians / normsq</code></div>
+          </div>
+        </div>
+        <div class="panel">
+          <h2>Scene</h2>
+          <div class="stats">
+            <div class="stat"><b id="n-atoms">–</b><span>atoms</span></div>
+            <div class="stat"><b id="n-bonds">–</b><span>bonds</span></div>
+            <div class="stat"><b id="n-shapes">–</b><span>shapes</span></div>
+          </div>
+          <div class="row">
+            <button class="primary" id="add-water">H₂O 추가</button>
+            <button id="add-salt">NaCl 추가</button>
+          </div>
+        </div>
+        <div class="panel">
+          <p class="note">
+            Penrose의 <code>encourage equal(200000/normsq(x1-x2), 0)</code> 반발항은 XPBD 소프트 제약에서
+            1/r² 강성이 커지므로, 최소 거리 부등식 <code>norm ≥ 1.6R</code> 소프트 제약으로 표현했습니다.
+            상대 레이어(<code>above</code>/<code>below</code>)는 숫자 <code>layer</code>로 옮겼습니다.
+          </p>
+        </div>
+      </aside>
+    </main>
+
+    <script type="module">
+      import { mountStructuralFormula } from './structural-formula.js';
+
+      const sf = mountStructuralFormula(document.getElementById('stage'));
+      const { s, types, predicates } = sf;
+      const { Carbon, Nitrogen, Oxygen, Hydrogen, Sodium, Chlorine, Title, Molecule } = types;
+      const { SingleBond, DoubleBond, IonicBond, Contains } = predicates;
+
+      /* ------------------------------------------------------------------ */
+      /* caffeine.substance                                                  */
+      /* ------------------------------------------------------------------ */
+
+      // Initial guesses only (Penrose samples these at random); the solver
+      // moves every atom.  AutoLabel All → label = element symbol.
+      const seed = {
+        C1: [-145, -80], C2: [-70, 40], C3: [0, 155], C4: [0, -80], C5: [70, -40], C6: [70, 40],
+        C7: [175, -135], C8: [200, 0], N1: [0, 80], N2: [-70, -40], N3: [140, -60], N4: [140, 60],
+        O1: [0, -160], O2: [-105, 120], H1: [270, 0], H2: [230, -175], H3: [225, -105], H4: [150, -210],
+        H5: [-210, -105], H6: [-205, -40], H7: [-140, -150], H8: [-50, 210], H9: [50, 210], H10: [0, 240],
+      };
+      const typeOf = { C: Carbon, N: Nitrogen, O: Oxygen, H: Hydrogen };
+      const atoms = {};
+      for (const [key, [x0, y0]] of Object.entries(seed)) {
+        atoms[key] = typeOf[key[0]]({ label: key[0], x0, y0 });
+      }
+      const A = (k) => atoms[k];
+      const singles = [
+        ['N2', 'C4'], ['C4', 'C5'], ['C6', 'N1'], ['N1', 'C2'], ['N2', 'C2'], ['N2', 'C1'],
+        ['C1', 'H7'], ['C1', 'H6'], ['C1', 'H5'], ['C7', 'H4'], ['C7', 'H3'], ['H2', 'C7'],
+        ['N3', 'C7'], ['N3', 'C5'], ['C8', 'N3'], ['N4', 'C6'], ['C8', 'H1'], ['C3', 'H10'],
+        ['C3', 'H8'], ['C3', 'H9'], ['N1', 'C3'],
+      ];
+      const doubles = [['C5', 'C6'], ['C2', 'O2'], ['C4', 'O1'], ['C8', 'N4']];
+      for (const [x, y] of singles) SingleBond(A(x), A(y));
+      for (const [x, y] of doubles) DoubleBond(A(x), A(y));
+      Title({ label: 'caffeine' });
+
+      s.step();
+
+      /* ------------------------------------------------------------------ */
+      /* Incremental substance — appended without rebuilding                 */
+      /* ------------------------------------------------------------------ */
+
+      let extras = 0;
+      document.getElementById('add-water').addEventListener('click', () => {
+        const ox = -250 + (extras % 3) * 250;
+        const oy = -300;
+        const o = Oxygen({ label: 'O', x0: ox, y0: oy });
+        const h1 = Hydrogen({ label: 'H', x0: ox - 40, y0: oy - 25 });
+        const h2 = Hydrogen({ label: 'H', x0: ox + 40, y0: oy - 25 });
+        SingleBond(o, h1);
+        SingleBond(o, h2);
+        extras++;
+        s.step();
+        refresh();
+      });
+      document.getElementById('add-salt').addEventListener('click', () => {
+        const x = 250 - (extras % 3) * 160;
+        const na = Sodium({ label: 'Na^+', x0: x - 35, y0: 290 });
+        const cl = Chlorine({ label: 'Cl^-', x0: x + 35, y0: 290 });
+        IonicBond(na, cl);
+        extras++;
+        s.step();
+        refresh();
+      });
+
+      const nAtoms = document.getElementById('n-atoms');
+      const nBonds = document.getElementById('n-bonds');
+      const nShapes = document.getElementById('n-shapes');
+      const status = document.getElementById('status');
+      function refresh() {
+        nAtoms.textContent = String(sf.nodes.size);
+        nBonds.textContent = String(
+          SingleBond.relations.length + DoubleBond.relations.length + IonicBond.relations.length,
+        );
+        nShapes.textContent = String(s.shapes.length);
+      }
+      refresh();
+      setInterval(() => {
+        status.textContent = s.converged ? 'settled · drag-free' : 'solving…';
+      }, 300);
+
+      window.__KITE_SF = { s, sf, atoms, singles, doubles };
+    </script>
+  </body>
+</html>

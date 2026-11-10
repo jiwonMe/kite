@@ -340,6 +340,61 @@ try {
   check('caffeine: labels and title', !!caffeine && caffeine.hasTitle && caffeine.hasOxygen && caffeine.hasNitrogen, JSON.stringify(caffeine));
   check('caffeine: no page errors', pageErrors.length === 0, pageErrors.join(' | '));
 
+  console.log('\nstructural-formula — Penrose port');
+  pageErrors.length = 0;
+  await page.goto(`http://127.0.0.1:${port}/examples/structural-formula.html`, { waitUntil: 'load' });
+  await page.waitForFunction(() => window.__KITE_SF && window.__KITE_SF.s.converged, null, { timeout: 20000 }).catch(() => {});
+  const sf = await page.evaluate(() => {
+    const { s, sf, atoms, singles, doubles } = window.__KITE_SF;
+    const pos = (k) => {
+      const n = sf.nodes.get(atoms[k].id);
+      return [s._val(n.cx), s._val(n.cy)];
+    };
+    const d = (a, b) => Math.hypot(pos(a)[0] - pos(b)[0], pos(a)[1] - pos(b)[1]);
+    const heavy = [...singles, ...doubles].filter(([a, b]) => a[0] !== 'H' && b[0] !== 'H').map(([a, b]) => d(a, b));
+    const hyd = singles.filter(([a, b]) => a[0] === 'H' || b[0] === 'H').map(([a, b]) => d(a, b));
+    const svg = s._svg;
+    const blur = [...svg.querySelectorAll('g')].find((g) => (g.getAttribute('style') || '').includes('blur(5px)'));
+    const fills = [...svg.querySelectorAll('circle')].map((c) => c.getAttribute('fill'));
+    return {
+      converged: s.converged,
+      heavy: [Math.min(...heavy), Math.max(...heavy)],
+      hyd: [Math.min(...hyd), Math.max(...hyd)],
+      ellipses: svg.querySelectorAll('ellipse').length,
+      images: svg.querySelectorAll('image').length,
+      blurChildren: blur ? blur.querySelectorAll('ellipse').length : 0,
+      blurOpacity: blur ? Number(blur.getAttribute('opacity')) : null,
+      labelsHidden: [...svg.querySelectorAll('text')].filter((t) => t.getAttribute('fill') === 'none').length,
+      oxygen: fills.filter((f) => f === 'rgb(255,102,102)').length,
+      hydrogenR: [...svg.querySelectorAll('circle')].filter((c) => Math.abs(Number(c.getAttribute('r')) - 18.75) < 1e-6).length,
+    };
+  });
+  check('SF: soft layout settles (sleep mode)', sf.converged, JSON.stringify(sf));
+  check('SF: heavy-atom bonds near bondLength 60', sf.heavy[0] > 54 && sf.heavy[1] < 80, JSON.stringify(sf.heavy));
+  // SingleBond says |d| = 60 and the hydrogen rule says 2|d| = 30.  With
+  // unit-free soft constraints the compromise is the mean of 60 and 15.
+  check('SF: hydrogen bonds at the 60 / 15 compromise (≈37.5)', sf.hyd[0] > 32 && sf.hyd[1] < 44, JSON.stringify(sf.hyd));
+  check('SF: Ellipse shadows + Image background/shading', sf.ellipses === 24 && sf.images === 25, JSON.stringify(sf));
+  check('SF: collect → one blurred Group of 24 shadows', sf.blurChildren === 24 && sf.blurOpacity === 0.1, JSON.stringify(sf));
+  check('SF: override + rgba/none (O fill, H radius, hidden labels)', sf.oxygen === 2 && sf.hydrogenR === 10 && sf.labelsHidden === 24, JSON.stringify(sf));
+
+  await page.click('#add-water');
+  await page.waitForTimeout(200);
+  await page.waitForFunction(() => window.__KITE_SF.s.converged, null, { timeout: 20000 }).catch(() => {});
+  const water = await page.evaluate(() => {
+    const { s, sf } = window.__KITE_SF;
+    const all = [...sf.nodes.values()];
+    const [o, h1, h2] = all.slice(-3).map((n) => [s._val(n.cx), s._val(n.cy)]);
+    const u = [h1[0] - o[0], h1[1] - o[1]];
+    const v = [h2[0] - o[0], h2[1] - o[1]];
+    const ang = Math.atan2(Math.abs(u[0] * v[1] - u[1] * v[0]), u[0] * v[0] + u[1] * v[1]);
+    const blur = [...s._svg.querySelectorAll('g')].find((g) => (g.getAttribute('style') || '').includes('blur(5px)'));
+    return { deg: (ang * 180) / Math.PI, nodes: all.length, blurChildren: blur.querySelectorAll('ellipse').length };
+  });
+  check('SF: appended H2O, angleBetween → 104.5°', Math.abs(water.deg - 104.5) < 3, JSON.stringify(water));
+  check('SF: collect re-runs on growth (27 shadows)', water.nodes === 27 && water.blurChildren === 27, JSON.stringify(water));
+  check('SF: no page errors', pageErrors.length === 0, pageErrors.join(' | '));
+
   console.log(`\n${passes.length} passed, ${failures.length} failed`);
   if (failures.length) {
     console.log('\nFailures:');

@@ -33,6 +33,7 @@ export const Op = Object.freeze({
   MAX: 11,
   MIN: 12,
   ABS: 13,
+  ATAN2: 14, // [ATAN2, yNode, xNode, 0] -> f = atan2(L, R)
 });
 
 export const ConstraintKind = Object.freeze({
@@ -160,6 +161,9 @@ function evaluateTape(tape, consts, vars) {
         break;
       case Op.ABS:
         f = Math.abs(out[a]);
+        break;
+      case Op.ATAN2:
+        f = Math.atan2(out[a], out[b]);
         break;
       default:
         f = NaN;
@@ -419,6 +423,30 @@ function compileAst(ast, values, scene) {
             compileAst(ast.args[1], values, scene),
             0,
           );
+        case 'toRadians':
+          arity(1);
+          return tape.emit(
+            Op.MUL,
+            compileAst(ast.args[0], values, scene),
+            tape.emitConst(Math.PI / 180),
+            0,
+          );
+        case 'toDegrees':
+          arity(1);
+          return tape.emit(
+            Op.MUL,
+            compileAst(ast.args[0], values, scene),
+            tape.emitConst(180 / Math.PI),
+            0,
+          );
+        case 'atan2':
+          arity(2);
+          return tape.emit(
+            Op.ATAN2,
+            compileAst(ast.args[0], values, scene),
+            compileAst(ast.args[1], values, scene),
+            0,
+          );
         case 'pow': {
           arity(2);
           const base = compileAst(ast.args[0], values, scene);
@@ -544,6 +572,7 @@ function kiteWorkerMain() {
     MAX: 11,
     MIN: 12,
     ABS: 13,
+    ATAN2: 14,
   };
   const EQ = 0;
   const INEQ = 1;
@@ -572,6 +601,8 @@ function kiteWorkerMain() {
     targets: [],
     mouseX: 0,
     mouseY: 0,
+    prevVars: new Float64Array(0),
+    activeTicks: 0,
   };
 
   function rand() {
@@ -673,6 +704,9 @@ function kiteWorkerMain() {
         case O.ABS:
           f = Math.abs(val[a]);
           break;
+        case O.ATAN2:
+          f = Math.atan2(val[a], val[b]);
+          break;
         default:
           f = NaN;
       }
@@ -750,6 +784,15 @@ function kiteWorkerMain() {
           if (val[a] > 0) adj[a] += ai;
           else if (val[a] < 0) adj[a] -= ai;
           break;
+        case O.ATAN2: {
+          // d/dy atan2(y,x) = x/(x²+y²),  d/dx = -y/(x²+y²)
+          const yv = val[a];
+          const xv = val[b];
+          const den = xv * xv + yv * yv + EPS;
+          adj[a] += (ai * xv) / den;
+          adj[b] -= (ai * yv) / den;
+          break;
+        }
         default:
           break;
       }
@@ -871,7 +914,12 @@ function kiteWorkerMain() {
       Sxy += S.invMass[v] * g * g;
     }
     if (Sxy < 1e-12) return;
-    const alphaT = c.compliance / (H * H);
+    // Soft constraints are frame-rate objectives (λ resets every frame), so
+    // like the mouse pull they are normalized by the frame timestep.  The
+    // compliance is also scaled by the constraint's own gradient norm S so
+    // an encourage() is unit-free: a distance (px) and an angle (rad) term
+    // both relax the same fraction 1/(1+α/Δt²) of their residual per pass.
+    const alphaT = c.compliance > 0 ? (c.compliance / (DT * DT)) * Sxy : 0;
     let dl;
     if (c.kind === INEQ) {
       // Inequalities are authored as C <= 0.  XPBD's multiplier is
@@ -957,6 +1005,16 @@ function kiteWorkerMain() {
         const bi = bodies[i];
         for (let j = i + 1; j < bodies.length; j++) {
           const bj = bodies[j];
+          // Shapes that share a center (icon + label) are one body, and
+          // pinned shapes (e.g. a canvas-sized background image) must not
+          // shove movable bodies around.
+          if (bi.xVar === bj.xVar && bi.yVar === bj.yVar) continue;
+          if (
+            (inv[bi.xVar] === 0 && inv[bi.yVar] === 0) ||
+            (inv[bj.xVar] === 0 && inv[bj.yVar] === 0)
+          ) {
+            continue;
+          }
           let dx = vars[bj.xVar] - vars[bi.xVar];
           let dy = vars[bj.yVar] - vars[bi.yVar];
           let d = Math.sqrt(dx * dx + dy * dy);
@@ -1051,6 +1109,7 @@ function kiteWorkerMain() {
         break;
       }
       case 'APPEND_TAPE': {
+        S.activeTicks = 0;
         const tapeDelta = new Int32Array(msg.tapeDelta || []);
         if (tapeDelta.length) {
           const nextTape = new Int32Array(S.tape.length + tapeDelta.length);
@@ -1091,6 +1150,7 @@ function kiteWorkerMain() {
       }
       case 'DRAG_START': {
         S.dragging = true;
+        S.activeTicks = 0;
         S.mouseX = msg.mouseX;
         S.mouseY = msg.mouseY;
         const targets = msg.targets || [{ varX: msg.varX, varY: msg.varY, offsetX: 0, offsetY: 0 }];
@@ -1113,14 +1173,28 @@ function kiteWorkerMain() {
         break;
       }
       case 'SET_VAR': {
+        S.activeTicks = 0;
         if (msg.varIdx >= 0 && msg.varIdx < S.vars.length) S.vars[msg.varIdx] = msg.value;
         break;
       }
       case 'TICK': {
+        if (S.prevVars.length !== S.vars.length) S.prevVars = new Float64Array(S.vars.length);
+        S.prevVars.set(S.vars);
         resetLambdas();
         solveSubsteps(K_SUBSTEPS);
         const err = maxHardError();
-        const converged = !S.dragging && err < 1e-3;
+        // Soft-only layouts (encourage) have no hard residual, so convergence
+        // also requires the frame's net motion to settle.  A time cap keeps
+        // mutually conflicting soft constraints from spinning forever.
+        let disp = 0;
+        for (let i = 0; i < S.vars.length; i++) {
+          const d = Math.abs(S.vars[i] - S.prevVars[i]);
+          if (d > disp) disp = d;
+        }
+        S.activeTicks++;
+        const settled = disp < 1e-2 || S.activeTicks > 300;
+        const converged = !S.dragging && err < 1e-3 && settled;
+        if (converged) S.activeTicks = 0;
         writeFrame(msg.buffer, err, converged);
         break;
       }
@@ -1151,6 +1225,149 @@ function makeSym(nodeId, scene, rel) {
 
 function isTemplate(strings) {
   return Array.isArray(strings) && Object.prototype.hasOwnProperty.call(strings, 'raw');
+}
+
+/* -------------------------------------------------------------------------- */
+/* Colors — Penrose-style rgba() with 0..1 channels, and none()                */
+/* -------------------------------------------------------------------------- */
+
+const NONE_COLOR = Object.freeze({ __kiteColor: true, none: true });
+
+function clamp01(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) throw new TypeError('[kite] color channel must be finite');
+  return n < 0 ? 0 : n > 1 ? 1 : n;
+}
+
+export function rgba(r, g, b, a = 1) {
+  return Object.freeze({
+    __kiteColor: true,
+    none: false,
+    r: clamp01(r),
+    g: clamp01(g),
+    b: clamp01(b),
+    a: clamp01(a),
+  });
+}
+
+export function none() {
+  return NONE_COLOR;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Equation — dependency-free TeX subset rendered as SVG <tspan>s              */
+/* -------------------------------------------------------------------------- */
+
+const TEX_SYMBOLS = Object.freeze({
+  alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', epsilon: 'ε', zeta: 'ζ', eta: 'η',
+  theta: 'θ', iota: 'ι', kappa: 'κ', lambda: 'λ', mu: 'μ', nu: 'ν', xi: 'ξ', pi: 'π',
+  rho: 'ρ', sigma: 'σ', tau: 'τ', upsilon: 'υ', phi: 'φ', chi: 'χ', psi: 'ψ', omega: 'ω',
+  Gamma: 'Γ', Delta: 'Δ', Theta: 'Θ', Lambda: 'Λ', Xi: 'Ξ', Pi: 'Π', Sigma: 'Σ',
+  Phi: 'Φ', Psi: 'Ψ', Omega: 'Ω',
+  cdot: '·', times: '×', pm: '±', mp: '∓', leq: '≤', geq: '≥', neq: '≠', approx: '≈',
+  infty: '∞', partial: '∂', nabla: '∇', sum: '∑', prod: '∏', int: '∫', to: '→',
+  rightarrow: '→', leftarrow: '←', leftrightarrow: '↔', rightleftharpoons: '⇌',
+  in: '∈', subset: '⊂', cup: '∪', cap: '∩', circ: '∘', degree: '°',
+});
+
+// Parse a TeX subset into runs: { text, shift: -1 | 0 | 1, italic }.
+function parseTexRuns(src) {
+  const runs = [];
+  let i = 0;
+  const push = (text, shift, italic) => {
+    if (!text) return;
+    const last = runs[runs.length - 1];
+    if (last && last.shift === shift && last.italic === italic) last.text += text;
+    else runs.push({ text, shift, italic });
+  };
+  const readGroup = () => {
+    if (src[i] === '{') {
+      let depth = 1;
+      let j = i + 1;
+      while (j < src.length && depth > 0) {
+        if (src[j] === '{') depth++;
+        else if (src[j] === '}') depth--;
+        j++;
+      }
+      const inner = src.slice(i + 1, j - 1);
+      i = j;
+      return inner;
+    }
+    if (src[i] === '\\') {
+      const m = /^\\([A-Za-z]+)/.exec(src.slice(i));
+      if (m) {
+        i += m[0].length;
+        return m[0];
+      }
+    }
+    return src[i++] || '';
+  };
+  const flat = (tex) => parseTexRuns(tex).map((r) => r.text).join('');
+  while (i < src.length) {
+    const ch = src[i];
+    if (ch === '\\') {
+      const m = /^\\([A-Za-z]+|.)/.exec(src.slice(i));
+      const name = m[1];
+      i += m[0].length;
+      if (name === 'frac') {
+        const num = flat(readGroup());
+        const den = flat(readGroup());
+        push(num + '/' + den, 0, false);
+      } else if (name === 'mathrm' || name === 'text' || name === 'mathbf') {
+        push(flat(readGroup()), 0, false);
+      } else if (name === ',' || name === ';' || name === ' ' || name === 'quad') {
+        push(' ', 0, false);
+      } else if (TEX_SYMBOLS[name]) {
+        push(TEX_SYMBOLS[name], 0, /^[a-z]/.test(name) && name.length > 1 && name !== 'cdot');
+      } else {
+        push(name, 0, false);
+      }
+      continue;
+    }
+    if (ch === '_' || ch === '^') {
+      i++;
+      push(flat(readGroup()), ch === '_' ? -1 : 1, false);
+      continue;
+    }
+    if (ch === '{' || ch === '}') {
+      i++;
+      continue;
+    }
+    if (ch === '$') {
+      i++;
+      continue;
+    }
+    push(ch, 0, false);
+    i++;
+  }
+  return runs;
+}
+
+function renderEquationInto(textEl, src) {
+  while (textEl.firstChild) textEl.removeChild(textEl.firstChild);
+  const runs = parseTexRuns(String(src));
+  for (const run of runs) {
+    const t = document.createElementNS(SVG_NS, 'tspan');
+    t.textContent = run.text;
+    if (run.shift !== 0) {
+      t.setAttribute('font-size', '70%');
+      t.setAttribute('baseline-shift', run.shift < 0 ? 'sub' : 'super');
+    }
+    if (run.italic) t.setAttribute('font-style', 'italic');
+    textEl.appendChild(t);
+  }
+}
+
+function colorToCss(c) {
+  if (c === undefined || c === null) return 'none';
+  if (typeof c === 'string') return c;
+  if (c && c.__kiteColor) {
+    if (c.none || c.a === 0) return 'none';
+    const to255 = (v) => Math.round(v * 255);
+    const rgb = to255(c.r) + ',' + to255(c.g) + ',' + to255(c.b);
+    return c.a >= 1 ? 'rgb(' + rgb + ')' : 'rgba(' + rgb + ',' + +c.a.toFixed(4) + ')';
+  }
+  throw new TypeError('[kite] color must be a CSS string, rgba(...) or none()');
 }
 
 function assertScene() {
@@ -1490,6 +1707,7 @@ class KiteSceneImpl {
   step() {
     this._activate();
     this._runRules();
+    this._runCollectRules();
     if (this._mounted) {
       this._flushToWorker();
       this._wake();
@@ -1643,15 +1861,48 @@ class KiteSceneImpl {
 
   _commonProps(props, kind) {
     const isLine = kind === 'line';
-    const isText = kind === 'text';
+    const isText = kind === 'text' || kind === 'equation';
+    const fill =
+      props.fill !== undefined
+        ? props.fill
+        : props.fillColor !== undefined
+          ? props.fillColor
+          : isLine ? 'none' : isText ? '#0f172a' : '#7c9cff';
+    const stroke =
+      props.stroke !== undefined
+        ? props.stroke
+        : props.strokeColor !== undefined
+          ? props.strokeColor
+          : isText ? 'none' : '#1f2937';
+    colorToCss(fill);
+    colorToCss(stroke);
     return {
-      fill: props.fill !== undefined ? props.fill : isLine ? 'none' : isText ? '#0f172a' : '#7c9cff',
-      stroke: props.stroke !== undefined ? props.stroke : isText ? 'none' : '#1f2937',
+      fill: fill,
+      stroke: stroke,
       strokeWidth: this._scalar(props.strokeWidth, 2, 'strokeWidth'),
       opacity: this._scalar(props.opacity, 1, 'opacity'),
       layer: props.layer === undefined ? 0 : Number(props.layer),
       drag: !!props.drag,
+      style: typeof props.style === 'string' ? props.style : '',
+      strokeLinecap: typeof props.strokeLinecap === 'string' ? props.strokeLinecap : null,
+      strokeDasharray:
+        typeof props.strokeDasharray === 'string' || typeof props.strokeDasharray === 'number'
+          ? String(props.strokeDasharray)
+          : null,
     };
+  }
+
+  _registerShape(shape, extra) {
+    shape.el = null;
+    shape.arrowEl = null;
+    shape.parent = null;
+    shape.removed = false;
+    this.shapes.push(shape);
+    this._markTopologyDirty();
+    this._requestRender();
+    const handle = Object.assign({}, shape.common, extra, { shapeId: shape.id });
+    Object.defineProperty(handle, '__kiteShape', { value: shape, enumerable: false });
+    return handle;
   }
 
   circle(props) {
@@ -1660,21 +1911,19 @@ class KiteSceneImpl {
     const common = this._commonProps(p, 'circle');
     const center = this._center(p.center, common.drag, 'circle');
     const r = this._scalar(p.r, 40, 'circle.r');
-    const id = NEXT_SHAPE_ID++;
-    const shape = {
-      id: id,
-      kind: 'circle',
-      x: center[0],
-      y: center[1],
-      r: r,
-      common: common,
-      el: null,
-      arrowEl: null,
-      attrs: {},
-    };
-    this.shapes.push(shape);
-    this._markTopologyDirty();
-    return Object.assign({}, common, { center: center, r: r, shapeId: id });
+    const shape = { id: NEXT_SHAPE_ID++, kind: 'circle', x: center[0], y: center[1], r: r, common: common };
+    return this._registerShape(shape, { center: center, r: r });
+  }
+
+  ellipse(props) {
+    this._activate();
+    const p = props || {};
+    const common = this._commonProps(p, 'ellipse');
+    const center = this._center(p.center, common.drag, 'ellipse');
+    const rx = this._scalar(p.rx, 60, 'ellipse.rx');
+    const ry = this._scalar(p.ry, 30, 'ellipse.ry');
+    const shape = { id: NEXT_SHAPE_ID++, kind: 'ellipse', x: center[0], y: center[1], rx: rx, ry: ry, common: common };
+    return this._registerShape(shape, { center: center, rx: rx, ry: ry });
   }
 
   line(props) {
@@ -1683,26 +1932,9 @@ class KiteSceneImpl {
     const common = this._commonProps(p, 'line');
     const start = this._center(p.start === undefined ? [-100, 0] : p.start, common.drag, 'line.start');
     const end = this._center(p.end === undefined ? [100, 0] : p.end, common.drag, 'line.end');
-    const id = NEXT_SHAPE_ID++;
-    const shape = {
-      id: id,
-      kind: 'line',
-      start: start,
-      end: end,
-      arrowEnd: !!p.arrowEnd,
-      common: common,
-      el: null,
-      arrowEl: null,
-      attrs: {},
-    };
-    this.shapes.push(shape);
-    this._markTopologyDirty();
-    return Object.assign({}, common, {
-      start: start,
-      end: end,
-      arrowEnd: !!p.arrowEnd,
-      shapeId: id,
-    });
+    if (p.style === 'dashed' && !common.strokeDasharray) common.strokeDasharray = '7,5';
+    const shape = { id: NEXT_SHAPE_ID++, kind: 'line', start: start, end: end, arrowEnd: !!p.arrowEnd, common: common };
+    return this._registerShape(shape, { start: start, end: end, arrowEnd: !!p.arrowEnd });
   }
 
   rect(props) {
@@ -1712,62 +1944,258 @@ class KiteSceneImpl {
     const center = this._center(p.center, common.drag, 'rect');
     const width = this._scalar(p.width, 120, 'rect.width');
     const height = this._scalar(p.height, 80, 'rect.height');
-    const id = NEXT_SHAPE_ID++;
+    const cornerRadius = this._scalar(p.cornerRadius, 0, 'rect.cornerRadius');
     const shape = {
-      id: id,
+      id: NEXT_SHAPE_ID++,
       kind: 'rect',
       x: center[0],
       y: center[1],
       width: width,
       height: height,
+      cornerRadius: cornerRadius,
       common: common,
-      el: null,
-      arrowEl: null,
-      attrs: {},
     };
-    this.shapes.push(shape);
-    this._markTopologyDirty();
-    return Object.assign({}, common, {
-      center: center,
-      width: width,
-      height: height,
-      shapeId: id,
-    });
+    return this._registerShape(shape, { center: center, width: width, height: height, cornerRadius: cornerRadius });
   }
 
-  text(props) {
+  _textLike(kind, props) {
     this._activate();
     const p = props || {};
-    if (typeof p.string !== 'string') throw new TypeError('[kite] text.string is required');
-    const common = this._commonProps(p, 'text');
-    const center = this._center(p.center, common.drag, 'text');
+    if (typeof p.string !== 'string') throw new TypeError('[kite] ' + kind + '.string is required');
+    const common = this._commonProps(p, kind);
+    const center = this._center(p.center, common.drag, kind);
     const fontSize = p.fontSize === undefined ? 16 : p.fontSize;
     if (typeof fontSize !== 'number' && typeof fontSize !== 'string' && !isSym(fontSize)) {
-      throw new TypeError('[kite] text.fontSize must be a number, string or SymExpr');
+      throw new TypeError('[kite] ' + kind + '.fontSize must be a number, string or SymExpr');
     }
     if (isSym(fontSize) && fontSize.__kiteScene && fontSize.__kiteScene !== this) {
-      throw new Error('[kite] text.fontSize belongs to a different scene');
+      throw new Error('[kite] ' + kind + '.fontSize belongs to a different scene');
     }
-    const id = NEXT_SHAPE_ID++;
     const shape = {
-      id: id,
-      kind: 'text',
+      id: NEXT_SHAPE_ID++,
+      kind: kind,
       x: center[0],
       y: center[1],
       string: p.string,
       fontSize: fontSize,
+      fontFamily: typeof p.fontFamily === 'string' ? p.fontFamily : null,
+      fontWeight: p.fontWeight !== undefined ? String(p.fontWeight) : null,
       common: common,
-      el: null,
-      arrowEl: null,
-      attrs: {},
     };
-    this.shapes.push(shape);
-    this._markTopologyDirty();
-    return Object.assign({}, common, {
-      center: center,
-      string: p.string,
-      fontSize: fontSize,
-      shapeId: id,
+    return this._registerShape(shape, { center: center, string: p.string, fontSize: fontSize });
+  }
+
+  text(props) {
+    return this._textLike('text', props);
+  }
+
+  /**
+   * Equation renders a small TeX-like subset without external dependencies:
+   * `_` / `^` scripts (single char or `{...}`), `\frac{a}{b}` as a/b, Greek
+   * letters, and a few operators.  Digits after element symbols in chemical
+   * formulas (`H_2O`) are therefore expressed as `H_2O`.
+   */
+  equation(props) {
+    return this._textLike('equation', props);
+  }
+
+  image(props) {
+    this._activate();
+    const p = props || {};
+    if (typeof p.href !== 'string' || !p.href) throw new TypeError('[kite] image.href is required');
+    const common = this._commonProps(p, 'image');
+    const center = this._center(p.center, common.drag, 'image');
+    const width = this._scalar(p.width, 100, 'image.width');
+    const height = this._scalar(p.height, 100, 'image.height');
+    const shape = {
+      id: NEXT_SHAPE_ID++,
+      kind: 'image',
+      x: center[0],
+      y: center[1],
+      width: width,
+      height: height,
+      href: p.href,
+      preserveAspectRatio: typeof p.preserveAspectRatio === 'string' ? p.preserveAspectRatio : 'xMidYMid meet',
+      common: common,
+    };
+    return this._registerShape(shape, { center: center, width: width, height: height, href: p.href });
+  }
+
+  /**
+   * Group re-parents existing shapes into one <g>.  Group opacity, style
+   * (e.g. "filter:blur(5px)") and layer apply to the whole set.  Members keep
+   * their own relative paint order inside the group.
+   */
+  group(props) {
+    this._activate();
+    const p = props || {};
+    const members = Array.isArray(p.shapes) ? p.shapes : [];
+    const common = this._commonProps(p, 'group');
+    const shape = { id: NEXT_SHAPE_ID++, kind: 'group', members: [], common: common };
+    const handle = this._registerShape(shape, { shapes: members });
+    for (const m of members) {
+      const child = this._shapeOf(m, 'group.shapes');
+      if (child === shape) throw new Error('[kite] a group cannot contain itself');
+      if (child.parent && child.parent !== shape) {
+        throw new Error('[kite] shape ' + child.id + ' already belongs to another group');
+      }
+      child.parent = shape;
+      shape.members.push(child);
+      if (child.el && child.el.parentNode) child.el.parentNode.removeChild(child.el);
+    }
+    return handle;
+  }
+
+  /**
+   * collect(Type, project, body) gathers every matching Substance instance
+   * into a list, maps it through `project`, and calls `body(list)` once.  It
+   * re-runs on step() only when the matched set grows, replacing the shapes
+   * produced by the previous run.
+   */
+  collect(selectorType, project, body) {
+    this._activate();
+    if (!selectorType || selectorType.__kiteType !== true) {
+      throw new TypeError('[kite] collect() needs a DomainType');
+    }
+    if (typeof project !== 'function' || typeof body !== 'function') {
+      throw new TypeError('[kite] collect(Type, project, body) needs two functions');
+    }
+    const rule = { type: selectorType, project: project, body: body, seen: '', produced: [] };
+    this._collectRules = this._collectRules || [];
+    this._collectRules.push(rule);
+    return rule;
+  }
+
+  _runCollectRules() {
+    if (!this._collectRules) return;
+    for (const rule of this._collectRules) {
+      const T = rule.type;
+      const matched = this.instances.filter((inst) => (inst.typeMask & T.bitmask) === T.bitmask);
+      const sig = matched.map((m) => m.id).join(',');
+      if (sig === rule.seen) continue;
+      rule.seen = sig;
+      for (const old of rule.produced) this._removeShape(old);
+      const before = this.shapes.length;
+      this._activate();
+      const items = [];
+      for (const inst of matched) {
+        const v = rule.project(inst);
+        if (v !== undefined && v !== null) items.push(v);
+      }
+      rule.body(items);
+      rule.produced = this.shapes.slice(before);
+    }
+  }
+
+  _removeShape(shape) {
+    if (!shape || shape.removed) return;
+    shape.removed = true;
+    if (shape.kind === 'group') {
+      for (const child of shape.members) {
+        child.parent = null;
+        if (child.el && child.el.parentNode) child.el.parentNode.removeChild(child.el);
+        if (this._svg && child.el && !child.removed) this._insertByLayer(child.el, child.common.layer);
+      }
+      shape.members = [];
+    }
+    if (shape.el && shape.el.parentNode) shape.el.parentNode.removeChild(shape.el);
+    const i = this.shapes.indexOf(shape);
+    if (i >= 0) this.shapes.splice(i, 1);
+    this._requestRender();
+  }
+
+  _shapeOf(handle, label) {
+    const shape = handle && (handle.__kiteShape || (handle.kind && handle.common ? handle : null));
+    if (!shape) throw new TypeError('[kite] ' + (label || 'value') + ' is not a shape handle');
+    return shape;
+  }
+
+  /**
+   * override(shapeHandle, props) replaces style or geometry props after a
+   * shape is created, mirroring Penrose's `override x.icon.fillColor = ...`.
+   * Later rules win.  Geometry props accept numbers or SymExprs.
+   */
+  override(handle, props) {
+    this._activate();
+    const shape = this._shapeOf(handle, 'override target');
+    const p = props || {};
+    const c = shape.common;
+    for (const key of Object.keys(p)) {
+      const v = p[key];
+      switch (key) {
+        case 'fill':
+        case 'fillColor':
+          colorToCss(v);
+          c.fill = v;
+          break;
+        case 'stroke':
+        case 'strokeColor':
+          colorToCss(v);
+          c.stroke = v;
+          break;
+        case 'strokeWidth':
+        case 'opacity':
+          c[key] = this._scalar(v, c[key], key);
+          break;
+        case 'layer':
+          c.layer = Number(v);
+          if (shape.el) {
+            shape.el.__kiteLayer = c.layer;
+            if (!shape.parent && shape.el.parentNode) {
+              shape.el.parentNode.removeChild(shape.el);
+              this._insertByLayer(shape.el, c.layer);
+            }
+          }
+          break;
+        case 'style':
+          c.style = String(v || '');
+          break;
+        case 'strokeLinecap':
+          c.strokeLinecap = v == null ? null : String(v);
+          break;
+        case 'strokeDasharray':
+          c.strokeDasharray = v == null ? null : String(v);
+          break;
+        case 'r':
+        case 'rx':
+        case 'ry':
+        case 'width':
+        case 'height':
+        case 'cornerRadius':
+          if (!(key in shape)) throw new Error('[kite] ' + shape.kind + ' has no "' + key + '" property');
+          shape[key] = this._scalar(v, shape[key], key);
+          break;
+        case 'fontSize':
+          if (!('fontSize' in shape)) throw new Error('[kite] ' + shape.kind + ' has no fontSize');
+          shape.fontSize = v;
+          break;
+        case 'string':
+          if (!('string' in shape)) throw new Error('[kite] ' + shape.kind + ' has no string');
+          shape.string = String(v);
+          if (shape.primitiveEl) shape._renderedString = null;
+          break;
+        case 'href':
+          if (shape.kind !== 'image') throw new Error('[kite] only images have href');
+          shape.href = String(v);
+          break;
+        case 'fontFamily':
+        case 'fontWeight':
+          shape[key] = v == null ? null : String(v);
+          break;
+        default:
+          throw new Error('[kite] override: unsupported property "' + key + '"');
+      }
+    }
+    this._requestRender();
+    return handle;
+  }
+
+  _requestRender() {
+    if (!this._svg || this._renderQueued) return;
+    this._renderQueued = true;
+    queueMicrotask(() => {
+      this._renderQueued = false;
+      if (!this._destroyed) this._render();
     });
   }
 
@@ -1837,7 +2265,7 @@ class KiteSceneImpl {
     const bodies = [];
     const varToBody = new Map();
     for (const shape of this.shapes) {
-      if (shape.kind === 'line') continue;
+      if (shape.kind === 'line' || shape.kind === 'group') continue;
       let xVar = null;
       let yVar = null;
       if (isSym(shape.x) && this.tape.opcode(shape.x.nodeId) === Op.VAR) xVar = this._varIndex(shape.x);
@@ -1849,7 +2277,15 @@ class KiteSceneImpl {
       let radius = 30;
       if (shape.kind === 'circle') radius = Math.abs(this._val(shape.r)) || 1;
       else if (shape.kind === 'rect') radius = Math.max(Math.abs(this._val(shape.width)), Math.abs(this._val(shape.height))) / 2;
-      else if (shape.kind === 'text') radius = 16;
+      else if (shape.kind === 'ellipse') radius = Math.max(Math.abs(this._val(shape.rx)), Math.abs(this._val(shape.ry)));
+      else if (shape.kind === 'image') radius = Math.max(Math.abs(this._val(shape.width)), Math.abs(this._val(shape.height))) / 2;
+      else if (shape.kind === 'text' || shape.kind === 'equation') radius = 16;
+      const existing = varToBody.get(xVar);
+      if (existing !== undefined && bodies[existing].yVar === yVar) {
+        bodies[existing].r = Math.max(bodies[existing].r, radius);
+        shape._bodyIndex = existing;
+        continue;
+      }
       const body = { xVar: xVar, yVar: yVar, r: radius };
       shape._bodyIndex = bodies.length;
       varToBody.set(xVar, bodies.length);
@@ -2148,10 +2584,34 @@ class KiteSceneImpl {
   _render() {
     if (!this._svg) return;
     this._computeNodes(false);
+    // Groups first so their <g> exists before members are moved into it.
+    for (const shape of this.shapes) {
+      if (shape.kind === 'group' && !shape.el) this._createShapeDOM(shape);
+    }
     for (const shape of this.shapes) {
       if (!shape.el) this._createShapeDOM(shape);
+      this._attachToParent(shape);
       this._renderShape(shape);
     }
+  }
+
+  _attachToParent(shape) {
+    const parent = shape.parent;
+    if (!parent || !parent.el) return;
+    if (shape.el.parentNode === parent.el) return;
+    if (shape.el.parentNode) shape.el.parentNode.removeChild(shape.el);
+    // Keep member order stable inside the group by layer, then creation id.
+    const siblings = parent.el.children;
+    for (let i = 0; i < siblings.length; i++) {
+      const sib = siblings[i];
+      const sl = Number(sib.__kiteLayer ?? 0);
+      const sid = Number(sib.getAttribute('data-kite-shape'));
+      if (sl > shape.common.layer || (sl === shape.common.layer && sid > shape.id)) {
+        parent.el.insertBefore(shape.el, sib);
+        return;
+      }
+    }
+    parent.el.appendChild(shape.el);
   }
 
   _insertByLayer(group, layer) {
@@ -2159,6 +2619,7 @@ class KiteSceneImpl {
     const children = svg.children;
     for (let i = 1; i < children.length; i++) {
       const el = children[i];
+      if (el.tagName === 'defs') continue;
       const l = Number(el.__kiteLayer ?? 0);
       if (l > layer) {
         svg.insertBefore(group, el);
@@ -2171,45 +2632,42 @@ class KiteSceneImpl {
   _createShapeDOM(shape) {
     const g = document.createElementNS(SVG_NS, 'g');
     g.setAttribute('data-kite-shape', String(shape.id));
+    g.setAttribute('data-kite-kind', shape.kind);
     g.style.pointerEvents = 'none';
     g.__kiteLayer = shape.common.layer;
     shape.el = g;
-    if (shape.kind === 'circle') {
-      const el = document.createElementNS(SVG_NS, 'circle');
-      g.appendChild(el);
-      shape.primitiveEl = el;
-    } else if (shape.kind === 'rect') {
-      const el = document.createElementNS(SVG_NS, 'rect');
-      g.appendChild(el);
-      shape.primitiveEl = el;
-    } else if (shape.kind === 'line') {
-      const el = document.createElementNS(SVG_NS, 'line');
-      g.appendChild(el);
-      shape.primitiveEl = el;
-      if (shape.arrowEnd) {
-        const arrow = document.createElementNS(SVG_NS, 'polygon');
-        g.appendChild(arrow);
-        shape.arrowEl = arrow;
-      }
-    } else if (shape.kind === 'text') {
-      const el = document.createElementNS(SVG_NS, 'text');
-      el.setAttribute('text-anchor', 'middle');
-      el.setAttribute('dominant-baseline', 'central');
-      el.textContent = shape.string;
-      g.appendChild(el);
-      shape.primitiveEl = el;
+    let el = null;
+    switch (shape.kind) {
+      case 'circle':
+      case 'ellipse':
+      case 'rect':
+      case 'line':
+        el = document.createElementNS(SVG_NS, shape.kind);
+        break;
+      case 'image':
+        el = document.createElementNS(SVG_NS, 'image');
+        break;
+      case 'text':
+      case 'equation':
+        el = document.createElementNS(SVG_NS, 'text');
+        el.setAttribute('text-anchor', 'middle');
+        el.setAttribute('dominant-baseline', 'central');
+        break;
+      case 'group':
+        break;
+      default:
+        break;
     }
-    const c = shape.common;
-    const el = shape.primitiveEl;
     if (el) {
-      if (shape.kind !== 'text') {
-        el.setAttribute('fill', String(c.fill));
-      }
-      el.setAttribute('stroke', String(c.stroke));
-      if (shape.kind === 'line') el.setAttribute('stroke-linecap', 'round');
+      g.appendChild(el);
+      shape.primitiveEl = el;
     }
-    g.setAttribute('opacity', String(c.opacity));
-    this._insertByLayer(g, c.layer);
+    if (shape.kind === 'line' && shape.arrowEnd) {
+      const arrow = document.createElementNS(SVG_NS, 'polygon');
+      g.appendChild(arrow);
+      shape.arrowEl = arrow;
+    }
+    if (!shape.parent) this._insertByLayer(g, shape.common.layer);
   }
 
   _setNum(el, key, value) {
@@ -2231,83 +2689,146 @@ class KiteSceneImpl {
     }
   }
 
+  _setStr(el, key, value) {
+    const attrs = el.__kiteStrAttrs || (el.__kiteStrAttrs = {});
+    if (value === null || value === undefined) {
+      if (attrs[key] !== undefined) {
+        el.removeAttribute(key);
+        delete attrs[key];
+      }
+      return;
+    }
+    const v = String(value);
+    if (attrs[key] !== v) {
+      el.setAttribute(key, v);
+      attrs[key] = v;
+    }
+  }
+
+  _fontSizeOf(shape) {
+    const fs = shape.fontSize;
+    if (typeof fs === 'number') return fs;
+    if (isSym(fs)) return this._val(fs);
+    const n = parseFloat(fs);
+    return Number.isFinite(n) ? n : 16;
+  }
+
   _renderShape(shape) {
     const c = shape.common;
+    const g = shape.el;
+    const opacity = this._val(c.opacity);
+    if (g.__kiteOpacity === undefined || Math.abs(g.__kiteOpacity - opacity) > 1e-3) {
+      g.setAttribute('opacity', String(opacity));
+      g.__kiteOpacity = opacity;
+    }
+    if (g.__kiteStyle !== c.style) {
+      if (c.style) g.setAttribute('style', 'pointer-events:none;' + c.style);
+      else g.setAttribute('style', 'pointer-events:none');
+      g.__kiteStyle = c.style;
+    }
+    if (shape.kind === 'group') return;
     const el = shape.primitiveEl;
     if (!el) return;
-    const strokeWidth = this._val(c.strokeWidth);
-    const opacity = this._val(c.opacity);
-    this._setStyleNum(el, 'stroke-width', strokeWidth);
-    if (shape.kind === 'circle') {
-      const cx = this._val(shape.x);
-      const cy = this._val(shape.y);
-      const r = Math.max(0, this._val(shape.r));
-      this._setNum(el, 'cx', cx);
-      this._setNum(el, 'cy', -cy);
-      this._setNum(el, 'r', r);
-    } else if (shape.kind === 'rect') {
-      const cx = this._val(shape.x);
-      const cy = this._val(shape.y);
-      const w = Math.max(0, this._val(shape.width));
-      const h = Math.max(0, this._val(shape.height));
-      this._setNum(el, 'x', cx - w / 2);
-      this._setNum(el, 'y', -cy - h / 2);
-      this._setNum(el, 'width', w);
-      this._setNum(el, 'height', h);
-    } else if (shape.kind === 'line') {
-      const x1 = this._val(shape.start[0]);
-      const y1 = this._val(shape.start[1]);
-      const x2 = this._val(shape.end[0]);
-      const y2 = this._val(shape.end[1]);
-      this._setNum(el, 'x1', x1);
-      this._setNum(el, 'y1', -y1);
-      this._setNum(el, 'x2', x2);
-      this._setNum(el, 'y2', -y2);
-      if (shape.arrowEl) {
-        const dx = x2 - x1;
-        const dy = y2 - y1;
-        const len = Math.sqrt(dx * dx + dy * dy) || 1;
-        const ux = dx / len;
-        const uy = dy / len;
-        const size = Math.max(6, strokeWidth * 4);
-        const bx = x2 - ux * size;
-        const by = y2 - uy * size;
-        const px = -uy * size * 0.5;
-        const py = ux * size * 0.5;
-        const points =
-          x2 + ',' + -y2 + ' ' +
-          (bx + px) + ',' + -(by + py) + ' ' +
-          (bx - px) + ',' + -(by - py);
-        if (shape.arrowEl.__kitePoints !== points) {
-          shape.arrowEl.setAttribute('points', points);
-          shape.arrowEl.__kitePoints = points;
-        }
-        const stroke = typeof c.stroke === 'string' ? c.stroke : '#1f2937';
-        if (shape.arrowEl.__kiteFill !== stroke) {
-          shape.arrowEl.setAttribute('fill', stroke);
-          shape.arrowEl.__kiteFill = stroke;
-        }
-      }
-    } else if (shape.kind === 'text') {
-      const cx = this._val(shape.x);
-      const cy = this._val(shape.y);
-      this._setNum(el, 'x', cx);
-      this._setNum(el, 'y', -cy);
-      const fs = typeof shape.fontSize === 'number' ? shape.fontSize : isSym(shape.fontSize) ? this._val(shape.fontSize) : shape.fontSize;
-      if (typeof fs === 'number') {
-        this._setStyleNum(el, 'font-size', fs);
-      } else if (el.getAttribute('font-size') !== String(fs)) {
-        el.setAttribute('font-size', String(fs));
-      }
+
+    if (shape.kind !== 'image') {
+      this._setStr(el, 'fill', shape.kind === 'line' ? 'none' : colorToCss(c.fill));
+      this._setStr(el, 'stroke', colorToCss(c.stroke));
+      this._setStyleNum(el, 'stroke-width', this._val(c.strokeWidth));
+      this._setStr(el, 'stroke-linecap', c.strokeLinecap || (shape.kind === 'line' ? 'round' : null));
+      this._setStr(el, 'stroke-dasharray', c.strokeDasharray);
     }
-    const go = shape.el.__kiteOpacity;
-    if (go === undefined || Math.abs(go - opacity) > 1e-3) {
-      shape.el.setAttribute('opacity', String(opacity));
-      shape.el.__kiteOpacity = opacity;
-    }
-    if (typeof c.fill === 'string' && shape.kind !== 'line' && shape.primitiveEl.__kiteFill !== c.fill) {
-      shape.primitiveEl.setAttribute('fill', c.fill);
-      shape.primitiveEl.__kiteFill = c.fill;
+
+    switch (shape.kind) {
+      case 'circle': {
+        this._setNum(el, 'cx', this._val(shape.x));
+        this._setNum(el, 'cy', -this._val(shape.y));
+        this._setNum(el, 'r', Math.max(0, this._val(shape.r)));
+        break;
+      }
+      case 'ellipse': {
+        this._setNum(el, 'cx', this._val(shape.x));
+        this._setNum(el, 'cy', -this._val(shape.y));
+        this._setNum(el, 'rx', Math.max(0, this._val(shape.rx)));
+        this._setNum(el, 'ry', Math.max(0, this._val(shape.ry)));
+        break;
+      }
+      case 'rect': {
+        const cx = this._val(shape.x);
+        const cy = this._val(shape.y);
+        const w = Math.max(0, this._val(shape.width));
+        const h = Math.max(0, this._val(shape.height));
+        this._setNum(el, 'x', cx - w / 2);
+        this._setNum(el, 'y', -cy - h / 2);
+        this._setNum(el, 'width', w);
+        this._setNum(el, 'height', h);
+        const rr = Math.max(0, this._val(shape.cornerRadius));
+        this._setNum(el, 'rx', rr);
+        this._setNum(el, 'ry', rr);
+        break;
+      }
+      case 'image': {
+        const cx = this._val(shape.x);
+        const cy = this._val(shape.y);
+        const w = Math.max(0, this._val(shape.width));
+        const h = Math.max(0, this._val(shape.height));
+        this._setNum(el, 'x', cx - w / 2);
+        this._setNum(el, 'y', -cy - h / 2);
+        this._setNum(el, 'width', w);
+        this._setNum(el, 'height', h);
+        this._setStr(el, 'href', shape.href);
+        this._setStr(el, 'preserveAspectRatio', shape.preserveAspectRatio);
+        break;
+      }
+      case 'line': {
+        const x1 = this._val(shape.start[0]);
+        const y1 = this._val(shape.start[1]);
+        const x2 = this._val(shape.end[0]);
+        const y2 = this._val(shape.end[1]);
+        this._setNum(el, 'x1', x1);
+        this._setNum(el, 'y1', -y1);
+        this._setNum(el, 'x2', x2);
+        this._setNum(el, 'y2', -y2);
+        if (shape.arrowEl) {
+          const dx = x2 - x1;
+          const dy = y2 - y1;
+          const len = Math.sqrt(dx * dx + dy * dy) || 1;
+          const ux = dx / len;
+          const uy = dy / len;
+          const size = Math.max(6, this._val(c.strokeWidth) * 4);
+          const bx = x2 - ux * size;
+          const by = y2 - uy * size;
+          const px = -uy * size * 0.5;
+          const py = ux * size * 0.5;
+          const points =
+            x2 + ',' + -y2 + ' ' + (bx + px) + ',' + -(by + py) + ' ' + (bx - px) + ',' + -(by - py);
+          this._setStr(shape.arrowEl, 'points', points);
+          this._setStr(shape.arrowEl, 'fill', colorToCss(c.stroke));
+        }
+        break;
+      }
+      case 'text':
+      case 'equation': {
+        this._setNum(el, 'x', this._val(shape.x));
+        this._setNum(el, 'y', -this._val(shape.y));
+        const fsRaw = shape.fontSize;
+        if (typeof fsRaw === 'string') this._setStr(el, 'font-size', fsRaw);
+        else this._setStyleNum(el, 'font-size', this._fontSizeOf(shape));
+        this._setStr(el, 'font-family', shape.fontFamily);
+        this._setStr(el, 'font-weight', shape.fontWeight);
+        if (shape.kind === 'equation') {
+          this._setStr(el, 'font-style', null);
+          if (shape._renderedString !== shape.string) {
+            renderEquationInto(el, shape.string);
+            shape._renderedString = shape.string;
+          }
+        } else if (shape._renderedString !== shape.string) {
+          el.textContent = shape.string;
+          shape._renderedString = shape.string;
+        }
+        break;
+      }
+      default:
+        break;
     }
   }
 
@@ -2366,7 +2887,17 @@ class KiteSceneImpl {
         r: Math.abs(this._val(shape.r)),
       };
     }
-    if (shape.kind === 'rect') {
+    if (shape.kind === 'ellipse') {
+      return {
+        kind: 'ellipse',
+        x: this._val(shape.x),
+        y: this._val(shape.y),
+        rx: Math.abs(this._val(shape.rx)),
+        ry: Math.abs(this._val(shape.ry)),
+      };
+    }
+    if (shape.kind === 'group') return { kind: 'none' };
+    if (shape.kind === 'rect' || shape.kind === 'image') {
       return {
         kind: 'rect',
         x: this._val(shape.x),
@@ -2375,8 +2906,8 @@ class KiteSceneImpl {
         h: Math.abs(this._val(shape.height)),
       };
     }
-    if (shape.kind === 'text') {
-      const fs = typeof shape.fontSize === 'number' ? shape.fontSize : isSym(shape.fontSize) ? this._val(shape.fontSize) : 16;
+    if (shape.kind === 'text' || shape.kind === 'equation') {
+      const fs = this._fontSizeOf(shape);
       return {
         kind: 'rect',
         x: this._val(shape.x),
@@ -2404,6 +2935,10 @@ class KiteSceneImpl {
         const dx = px - g.x;
         const dy = py - g.y;
         if (dx * dx + dy * dy <= (g.r + 6) * (g.r + 6)) return shape;
+      } else if (g.kind === 'ellipse') {
+        const ex = (px - g.x) / (g.rx + 6 || 1);
+        const ey = (py - g.y) / (g.ry + 6 || 1);
+        if (ex * ex + ey * ey <= 1) return shape;
       } else if (g.kind === 'rect') {
         if (Math.abs(px - g.x) <= g.w / 2 + 3 && Math.abs(py - g.y) <= g.h / 2 + 3) return shape;
       } else if (g.kind === 'line') {
@@ -2643,6 +3178,80 @@ export const ops = Object.freeze({
       makeSym(scene.tape.emit(Op.DIV, valueToNode(v[0], scene), n.nodeId, 0), scene),
       makeSym(scene.tape.emit(Op.DIV, valueToNode(v[1], scene), n.nodeId, 0), scene),
     ];
+  },
+
+  /** Squared Euclidean norm |v|². Smooth everywhere (no sqrt). */
+  normsq(v) {
+    const scene = assertScene();
+    const x2 = scene.tape.emit(Op.POW2, valueToNode(v[0], scene), -1, 0);
+    const y2 = scene.tape.emit(Op.POW2, valueToNode(v[1], scene), -1, 0);
+    return makeSym(scene.tape.emit(Op.ADD, x2, y2, 0), scene);
+  },
+
+  /** Squared distance |p - q|². */
+  distsq(p, q) {
+    return ops.normsq(ops.vsub(p, q));
+  },
+
+  /** 2D cross product u × v (z-component). */
+  cross(u, v) {
+    const scene = assertScene();
+    const a = scene.tape.emit(Op.MUL, valueToNode(u[0], scene), valueToNode(v[1], scene), 0);
+    const b = scene.tape.emit(Op.MUL, valueToNode(u[1], scene), valueToNode(v[0], scene), 0);
+    return makeSym(scene.tape.emit(Op.SUB, a, b, 0), scene);
+  },
+
+  /** Rotate v by +90°: (-v.y, v.x). */
+  rot90(v) {
+    const scene = assertScene();
+    return [makeSym(scene.tape.emit(Op.NEG, valueToNode(v[1], scene), -1, 0), scene), v[0]];
+  },
+
+  /**
+   * Unsigned angle between u and v in [0, π], computed as
+   * atan2(|u × v|, u · v).  Unlike acos(u·v / |u||v|) it stays well
+   * conditioned near 0 and π and needs no normalization.
+   */
+  angleBetween(u, v) {
+    const scene = assertScene();
+    const cr = ops.cross(u, v);
+    const absCr = scene.tape.emit(Op.ABS, cr.nodeId, -1, 0);
+    const dt = ops.dot(u, v);
+    return makeSym(scene.tape.emit(Op.ATAN2, absCr, dt.nodeId, 0), scene);
+  },
+
+  /** Signed angle from u to v in (-π, π]. */
+  angleFrom(u, v) {
+    const scene = assertScene();
+    const cr = ops.cross(u, v);
+    const dt = ops.dot(u, v);
+    return makeSym(scene.tape.emit(Op.ATAN2, cr.nodeId, dt.nodeId, 0), scene);
+  },
+
+  /** atan2(y, x) as a differentiable expression. */
+  atan2(y, x) {
+    const scene = assertScene();
+    return makeSym(scene.tape.emit(Op.ATAN2, valueToNode(y, scene), valueToNode(x, scene), 0), scene);
+  },
+
+  /** Degrees → radians. Plain numbers fold to a number. */
+  toRadians(deg) {
+    if (typeof deg === 'number') return (deg * Math.PI) / 180;
+    const scene = assertScene();
+    return makeSym(scene.tape.emit(Op.MUL, valueToNode(deg, scene), scene.tape.emitConst(Math.PI / 180), 0), scene);
+  },
+
+  /** Radians → degrees. Plain numbers fold to a number. */
+  toDegrees(rad) {
+    if (typeof rad === 'number') return (rad * 180) / Math.PI;
+    const scene = assertScene();
+    return makeSym(scene.tape.emit(Op.MUL, valueToNode(rad, scene), scene.tape.emitConst(180 / Math.PI), 0), scene);
+  },
+
+  /** Penrose-style equal(a, b): returns a - b for use with ensure/encourage. */
+  equal(a, b) {
+    const scene = assertScene();
+    return makeSym(scene.tape.emit(Op.SUB, valueToNode(a, scene), valueToNode(b, scene), 0), scene);
   },
 
   contains(outerCircle, innerCircle, padding) {
@@ -2918,6 +3527,8 @@ const Kite = {
   ensure: ensure,
   encourage: encourage,
   ops: ops,
+  rgba: rgba,
+  none: none,
   Op: Op,
   ConstraintKind: ConstraintKind,
   KiteDiagramElement: KiteDiagramElement,
