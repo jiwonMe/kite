@@ -64,10 +64,10 @@
         <h1>structural-formula, ported.</h1>
         <p class="lede">
           Penrose의 structural-formula Domain·Style·Substance를 규칙 단위로 옮긴 예제입니다. 원자 좌표는
-          자유 변수이고, 결합 길이·물 결합각·반발은 Penrose와 같은 <code>encourage</code> 목표로 XPBD 솔버가 풉니다.
+          자유 변수이고, 결합 길이·물 결합각·반발은 Penrose와 같은 <code>encourage</code> 목표로 XPBD 솔버가 풉니다. 원자를 직접 드래그해 보세요.
         </p>
         <div class="stage">
-          <div class="stage-head"><span>caffeine.substance · structural-formula.style</span><span id="status">solving…</span></div>
+          <div class="stage-head"><span>caffeine.substance · structural-formula.style</span><span id="status">drag an atom · solving…</span></div>
           <div id="stage"></div>
         </div>
       </section>
@@ -188,7 +188,7 @@
       }
       refresh();
       setInterval(() => {
-        status.textContent = s.converged ? 'settled · drag-free' : 'solving…';
+        status.textContent = s.converged ? 'settled · drag an atom' : 'solving…';
       }, 300);
 
       window.__KITE_SF = { s, sf, atoms, singles, doubles };

@@ -111,6 +111,7 @@ export function mountStructuralFormula(el, options = {}) {
       strokeColor: Colors.black,
       strokeWidth: 3,
       layer: L.icon,
+      drag: true,
     });
     const shading = s.image({
       href: SVG_SHADING,

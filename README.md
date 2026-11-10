@@ -106,7 +106,7 @@ export PLAYWRIGHT_CORE="/path/to/playwright-core/index.mjs"
 5. **Spatial hash stress (보조)** — 36개 원, 630개 `disjoint` 쌍.
    32쌍 초과 시 균일 격자 광역 단계가 활성 쌍만 XPBD에 투입하는지 검증.
 
-현재 결과: **단위 테스트 16개 + 브라우저 인수 검증 56개 통과.**
+현재 결과: **단위 테스트 16개 + 브라우저 인수 검증 57개 통과.**
 
 ---
 
@@ -303,7 +303,7 @@ Penrose Style 프로그램을 규칙 단위로 옮길 수 있도록 다음을 �
 - [`examples/structural-formula.html`](./examples/structural-formula.html) — Penrose
   structural-formula 트리오의 규칙 단위 포트. 원자 좌표는 자유 변수이고 결합 길이·물 결합각·반발을
   `encourage`로 풉니다. H₂O / NaCl을 런타임에 추가할 수 있습니다.
-- [`examples/caffeine.html`](./examples/caffeine.html) — 고정 좌표의 단순 버전.
+- [`examples/caffeine.html`](./examples/caffeine.html) — 고정 좌표의 정적 버전 (드래그 없음).
 
 ### 포팅 시 차이
 

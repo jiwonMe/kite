@@ -393,6 +393,42 @@ try {
   });
   check('SF: appended H2O, angleBetween → 104.5°', Math.abs(water.deg - 104.5) < 3, JSON.stringify(water));
   check('SF: collect re-runs on growth (27 shadows)', water.nodes === 27 && water.blurChildren === 27, JSON.stringify(water));
+
+  // Atoms are free variables and carry drag:true, so the icon, shading,
+  // shadow, label and every attached bond must follow the pointer.
+  await page.evaluate(() => document.getElementById('stage').scrollIntoView({ block: 'center' }));
+  await page.waitForTimeout(200);
+  const atomPoint = await page.evaluate(() => {
+    const { s, sf, atoms } = window.__KITE_SF;
+    const n = sf.nodes.get(atoms.C1.id);
+    const x = s._val(n.cx);
+    const y = s._val(n.cy);
+    const svg = s._svg;
+    const client = (wx, wy) => {
+      const p = svg.createSVGPoint();
+      p.x = wx;
+      p.y = -wy;
+      const o = p.matrixTransform(svg.getScreenCTM());
+      return { x: o.x, y: o.y };
+    };
+    return { x, y, from: client(x, y), to: client(x + 60, y + 35) };
+  });
+  await page.mouse.move(atomPoint.from.x, atomPoint.from.y);
+  await page.mouse.down();
+  await page.mouse.move(atomPoint.to.x, atomPoint.to.y, { steps: 10 });
+  await page.waitForTimeout(450);
+  const dragged = await page.evaluate(() => {
+    const { s, sf, atoms } = window.__KITE_SF;
+    const n = sf.nodes.get(atoms.C1.id);
+    return { x: s._val(n.cx), y: s._val(n.cy), dragging: s._dragActive };
+  });
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+  check(
+    'SF: atoms are draggable (icon + bonds + labels follow)',
+    dragged.dragging && Math.hypot(dragged.x - atomPoint.x, dragged.y - atomPoint.y) > 25,
+    JSON.stringify({ from: [atomPoint.x, atomPoint.y], to: [dragged.x, dragged.y] }),
+  );
   check('SF: no page errors', pageErrors.length === 0, pageErrors.join(' | '));
 
   console.log(`\n${passes.length} passed, ${failures.length} failed`);
