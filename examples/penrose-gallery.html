@@ -1,0 +1,644 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kite — Penrose examples, ported</title>
+    <style>
+      :root {
+        --ink: #111827;
+        --muted: #667085;
+        --faint: #98a2b3;
+        --line: #e4e7ec;
+        --paper: #f5f7fb;
+        --card: #ffffff;
+        --accent: #2f5de3;
+        --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        --sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+      }
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+      a { color: inherit; }
+      .shell { max-width: 1240px; margin: 0 auto; padding: 0 30px; }
+      header { padding: 24px 0 0; }
+      .nav { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+      .brand { display: flex; align-items: center; gap: 10px; font-weight: 650; letter-spacing: -.02em; text-decoration: none; }
+      .mark { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: var(--ink); color: #fff; transform: rotate(-4deg); }
+      .nav-links { display: flex; gap: 20px; font-size: 12.5px; color: var(--muted); }
+      .nav-links a { text-decoration: none; }
+      .nav-links a:hover { color: var(--ink); }
+      .intro { padding: 54px 0 10px; display: grid; grid-template-columns: 1.4fr .6fr; gap: 40px; align-items: end; }
+      .eyebrow { display: inline-flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); background: #eef2ff; border: 1px solid #dbe4ff; padding: 6px 10px; border-radius: 999px; }
+      .eyebrow::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px #dbe4ff; }
+      h1 { margin: 18px 0 10px; font-family: var(--serif); font-size: clamp(40px, 4.6vw, 62px); font-weight: 500; line-height: 1; letter-spacing: -.05em; }
+      h1 em { color: var(--accent); font-style: italic; }
+      .lede { margin: 0; max-width: 66ch; font-size: 14px; line-height: 1.7; color: var(--muted); }
+      .summary { border-left: 1px solid var(--line); padding-left: 22px; font-size: 12px; color: var(--muted); line-height: 1.65; }
+      .summary b { color: var(--ink); font-family: var(--mono); font-weight: 600; }
+      .chips { display: flex; flex-wrap: wrap; gap: 7px; padding: 26px 0 0; }
+      .chip { font-family: var(--mono); font-size: 10px; padding: 5px 8px; border-radius: 6px; background: #fff; border: 1px solid var(--line); color: #475467; }
+      .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; padding: 22px 0 70px; }
+      .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; box-shadow: 0 14px 40px rgba(16,24,40,.05); }
+      .card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 16px; border-bottom: 1px solid #eef1f5; }
+      .card-head h2 { margin: 0; font-size: 13.5px; letter-spacing: -.01em; }
+      .tag { font-family: var(--mono); font-size: 9.5px; color: var(--accent); background: #eef2ff; border: 1px solid #dbe4ff; border-radius: 5px; padding: 3px 6px; white-space: nowrap; }
+      .stage { background: #fbfcfe; }
+      .stage svg { display: block; width: 100%; height: auto; }
+      .stage text { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
+      .card-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; border-top: 1px solid #eef1f5; font-size: 10.5px; color: var(--faint); }
+      .card-foot a { color: #475467; text-decoration: none; }
+      .card-foot a:hover { color: var(--accent); }
+      .note { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; margin-bottom: 30px; }
+      .note h2 { margin: 0 0 8px; font-size: 13px; }
+      .note p { margin: 0; font-size: 12px; line-height: 1.7; color: var(--muted); }
+      .note code { font-family: var(--mono); font-size: .9em; background: #f1f4f9; padding: 1px 4px; border-radius: 4px; }
+      footer { border-top: 1px solid var(--line); padding: 24px 0 44px; font-size: 11.5px; color: var(--faint); display: flex; justify-content: space-between; gap: 24px; }
+      footer a { color: #475467; text-decoration: none; }
+      @media (max-width: 900px) { .intro, .grid { grid-template-columns: 1fr; } .summary { border-left: 0; padding-left: 0; } }
+      @media (max-width: 620px) { .shell { padding: 0 16px; } .nav-links { display: none; } }
+    </style>
+  </head>
+  <body>
+    <header class="shell">
+      <nav class="nav">
+        <a class="brand" href="../index.html"><span class="mark">◇</span> Kite</a>
+        <div class="nav-links">
+          <a href="../index.html">Playground</a>
+          <a href="structural-formula.html">Structural formula</a>
+          <a href="../tests/acceptance.html">Acceptance tests</a>
+          <a href="https://penrose.cs.cmu.edu/examples">Penrose examples</a>
+        </div>
+      </nav>
+    </header>
+
+    <main class="shell">
+      <section class="intro">
+        <div>
+          <span class="eyebrow">Penrose examples · Kite port</span>
+          <h1>The same examples, <em>declared</em>.</h1>
+          <p class="lede">
+            Penrose 예제 갤러리에서 2D로 표현 가능한 대표 13개를 골라 Kite 장면으로 옮겼습니다.
+            각 카드는 독립된 <code>KiteScene</code>이며, 도형·라벨·제약·레이어는 원본 Trio의 구조를 따릅니다.
+          </p>
+          <div class="chips">
+            <span class="chip">set theory</span><span class="chip">continuous maps</span>
+            <span class="chip">graphs</span><span class="chip">logic circuits</span>
+            <span class="chip">arrays</span><span class="chip">data viz</span>
+            <span class="chip">architecture</span><span class="chip">envelopes</span>
+            <span class="chip">fractals</span><span class="chip">group theory</span>
+            <span class="chip">spectral graphs</span><span class="chip">structural formula</span>
+          </div>
+        </div>
+        <div class="summary">
+          <b>13 / 58</b> examples ported<br />
+          원본: <a href="https://penrose.cs.cmu.edu/examples">penrose.cs.cmu.edu/examples</a><br />
+          각 카드의 <b>source</b> 링크는 대응하는 Penrose Trio 폴더입니다.
+        </div>
+      </section>
+
+      <div class="grid" id="grid"></div>
+
+      <section class="note">
+        <h2>옮기지 못한 예제</h2>
+        <p>
+          카탈로그의 3D·ray tracing·LaTeX 수식·대규모 mesh 예제는 현재 Kite의 2D 도형 집합
+          (Circle / Line / Rect / Ellipse / Image / Text / Equation)으로 완전히 재현할 수 없어 제외했습니다.
+          대표적으로 <code>triangle-mesh-3d</code>, <code>ray-tracing</code>, <code>mobius</code>,
+          <code>lagrange-bases</code>, <code>tsne</code>, <code>dinoshade</code>가 여기에 해당합니다.
+          원본 Substance 데이터만 가져와 단순화한 카드도 있습니다.
+        </p>
+      </section>
+    </main>
+
+    <footer class="shell">
+      <span>Kite · Penrose examples port</span>
+      <span><a href="../index.html">Playground</a> · <a href="structural-formula.html">Structural formula</a> · <a href="../tests/acceptance.html">Tests</a></span>
+    </footer>
+
+    <script type="module">
+      import { scene, $, ensure, ops, rgba } from '../kite.js';
+
+      const INK = '#111827';
+      const MUTED = '#667085';
+      const FAINT = '#98a2b3';
+      const BLUE = '#2f5de3';
+      const GREEN = '#059669';
+      const ORANGE = '#d97706';
+      const RED = '#dc2626';
+      const VIOLET = '#7c3aed';
+
+      const scenes = [];
+      function make(stageId, seed) {
+        const s = scene(document.getElementById(stageId), { width: 520, height: 360, seed });
+        scenes.push(s);
+        return s;
+      }
+      function text(s, str, x, y, size = 11, fill = INK, layer = 5, extra = {}) {
+        return s.text({ center: [x, y], string: str, fontSize: size, fill, stroke: 'none', layer, ...extra });
+      }
+      function setCircle(s, x, y, r, fill, stroke, layer = 1) {
+        return s.circle({ center: [x, y], r, fill, stroke, strokeWidth: 1.4, layer });
+      }
+
+      const EXAMPLES = [];
+
+      /* ------------------------------------------------------------------ */
+      /* 1. Set theory — tree Euler                                          */
+      /* ------------------------------------------------------------------ */
+      EXAMPLES.push({
+        id: 'tree-euler',
+        title: 'Tree Euler diagram',
+        tag: 'set-theory-domain',
+        source: 'set-theory-domain/tree-euler',
+        build() {
+          const s = make('stage-tree-euler', 11);
+          setCircle(s, 0, 0, 150, 'rgba(47,93,227,0.06)', BLUE);
+          setCircle(s, -60, 4, 70, 'rgba(16,185,129,0.13)', GREEN);
+          setCircle(s, 72, 0, 55, 'rgba(245,158,11,0.14)', ORANGE);
+          setCircle(s, -75, -18, 28, 'rgba(124,58,237,0.16)', VIOLET);
+          setCircle(s, 88, 8, 22, 'rgba(236,72,153,0.16)', '#db2777');
+          text(s, 'A', 0, 128, 17, INK);
+          text(s, 'B', -60, 45, 15, INK);
+          text(s, 'C', 72, 40, 15, INK);
+          text(s, 'D', -75, -18, 13, INK);
+          text(s, 'E', 88, 8, 12, INK);
+        },
+      });
+
+      /* ------------------------------------------------------------------ */
+      /* 2. Continuous map                                                   */
+      /* ------------------------------------------------------------------ */
+      EXAMPLES.push({
+        id: 'continuousmap',
+        title: 'Continuous map f : A → B',
+        tag: 'set-theory-domain',
+        source: 'set-theory-domain/continuousmap',
+        build() {
+          const s = make('stage-continuousmap', 12);
+          for (const [cx, nameOuter, nameMid, nameIn] of [
+            [-145, 'R^n', 'A', 'U'],
+            [145, 'R^m', 'B', 'V'],
+          ]) {
+            setCircle(s, cx, 0, 105, 'rgba(47,93,227,0.04)', '#94a3b8');
+            setCircle(s, cx, 0, 76, 'rgba(47,93,227,0.09)', BLUE);
+            setCircle(s, cx, 0, 42, 'rgba(16,185,129,0.14)', GREEN);
+            s.equation({ center: [cx, 66], string: nameOuter, fontSize: 15, fill: MUTED, stroke: 'none', layer: 5 });
+            text(s, nameMid, cx, 22, 15, INK);
+            text(s, nameIn, cx, -14, 13, INK);
+          }
+          s.line({ start: [-100, 0], end: [100, 0], stroke: INK, strokeWidth: 1.6, arrowEnd: true, layer: 4 });
+          s.equation({ center: [0, 14], string: 'f', fontSize: 17, fill: INK, stroke: 'none', layer: 5 });
+        },
+      });
+
+      /* ------------------------------------------------------------------ */
+      /* 3. Directed multigraph — US cities                                  */
+      /* ------------------------------------------------------------------ */
+      EXAMPLES.push({
+        id: 'fig5',
+        title: 'US city multigraph',
+        tag: 'graph-domain',
+        source: 'graph-domain/textbook/sec1/fig5',
+        build() {
+          const s = make('stage-fig5', 13);
+          const P = {
+            Chicago: [0, 60], Denver: [-120, 20], Detroit: [60, 100],
+            LA: [-180, -90], NYC: [150, 40], SF: [-200, -20], Washington: [120, -80],
+          };
+          const links = [
+            ['Chicago', 'Denver'], ['Chicago', 'Denver'], ['Chicago', 'Detroit'],
+            ['Chicago', 'NYC'], ['Chicago', 'NYC'], ['Chicago', 'Washington'],
+            ['Denver', 'Chicago'], ['Denver', 'Chicago'], ['Denver', 'LA'],
+            ['Denver', 'SF'], ['Detroit', 'NYC'], ['LA', 'Denver'], ['LA', 'SF'],
+            ['SF', 'Denver'], ['SF', 'Denver'], ['SF', 'LA'], ['Washington', 'Chicago'],
+          ];
+          const groups = new Map();
+          for (const [a, b] of links) {
+            const key = [a, b].sort().join('|');
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key).push([a, b]);
+          }
+          for (const list of groups.values()) {
+            const n = list.length;
+            list.forEach(([a, b], idx) => {
+              const [ax, ay] = P[a];
+              const [bx, by] = P[b];
+              const dx = bx - ax, dy = by - ay;
+              const len = Math.hypot(dx, dy) || 1;
+              const ox = (-dy / len) * (idx - (n - 1) / 2) * 9;
+              const oy = (dx / len) * (idx - (n - 1) / 2) * 9;
+              s.line({
+                start: [ax + ox, ay + oy], end: [bx + ox, by + oy],
+                stroke: '#94a3b8', strokeWidth: 1.1, arrowEnd: true, layer: 1,
+              });
+            });
+          }
+          for (const [name, [x, y]] of Object.entries(P)) {
+            s.circle({ center: [x, y], r: 9, fill: '#fff', stroke: INK, strokeWidth: 1.6, layer: 3 });
+            text(s, name, x, y - 17, 10.5, INK, 5);
+          }
+        },
+      });
+
+      /* ------------------------------------------------------------------ */
+      /* 4. Logic circuit — half adder                                       */
+      /* ------------------------------------------------------------------ */
+      EXAMPLES.push({
+        id: 'half-adder',
+        title: 'Half adder circuit',
+        tag: 'logic-circuit-domain',
+        source: 'logic-circuit-domain/half-adder',
+        build() {
+          const s = make('stage-half-adder', 14);
+          const wire = (pts, arrow = true) => {
+            for (let i = 0; i < pts.length - 1; i++) {
+              s.line({
+                start: pts[i], end: pts[i + 1], stroke: MUTED, strokeWidth: 1.5,
+                arrowEnd: arrow && i === pts.length - 2, layer: 1,
+              });
+            }
+          };
+          const box = (x, y, w, h, label, fill = '#eef2ff') => {
+            s.rect({ center: [x, y], width: w, height: h, cornerRadius: 7, fill, stroke: BLUE, strokeWidth: 1.5, layer: 2 });
+            text(s, label, x, y, 11, INK, 5);
+          };
+          s.circle({ center: [-215, 70], r: 13, fill: '#fff', stroke: INK, layer: 2 });
+          s.circle({ center: [-215, -70], r: 13, fill: '#fff', stroke: INK, layer: 2 });
+          text(s, 'A', -215, 70, 11, INK);
+          text(s, 'B', -215, -70, 11, INK);
+          box(-140, 70, 46, 34, '1→2', '#f8fafc');
+          box(-140, -70, 46, 34, '1→2', '#f8fafc');
+          box(0, 48, 80, 50, 'XOR');
+          box(0, -58, 80, 50, 'AND');
+          wire([[-202, 70], [-163, 70]]);
+          wire([[-202, -70], [-163, -70]]);
+          wire([[-117, 79], [-80, 79], [-80, 60], [-40, 60]]);
+          wire([[-117, 61], [-95, 61], [-95, -48], [-40, -48]]);
+          wire([[-117, -61], [-75, -61], [-75, 36], [-40, 36]]);
+          wire([[-117, -79], [-60, -79], [-60, -68], [-40, -68]]);
+          wire([[40, 48], [190, 48]]);
+          wire([[40, -58], [190, -58]]);
+          s.circle({ center: [210, 48], r: 13, fill: '#fff', stroke: INK, layer: 2 });
+          s.circle({ center: [210, -58], r: 13, fill: '#fff', stroke: INK, layer: 2 });
+          text(s, 'S', 210, 48, 11, INK);
+          text(s, 'C', 210, -58, 11, INK);
+        },
+      });
+
+      /* ------------------------------------------------------------------ */
+      /* 5. Array models — insertion sort                                    */
+      /* ------------------------------------------------------------------ */
+      EXAMPLES.push({
+        id: 'insertionSort',
+        title: 'Insertion sort stages',
+        tag: 'array-models',
+        source: 'array-models/insertionSort',
+        build() {
+          const s = make('stage-insertionSort', 15);
+          const stages = [
+            { label: 'unsorted', vals: [42, 8, 14, 94, 4, 22, 74], hi: 1, y: 100 },
+            { label: 'stage 1', vals: [8, 42, 14, 94, 4, 22, 74], hi: 2, y: 0 },
+            { label: 'stage 2', vals: [8, 14, 42, 94, 4, 22, 74], hi: 3, y: -100 },
+          ];
+          for (const st of stages) {
+            text(s, st.label, -225, st.y, 10.5, FAINT);
+            st.vals.forEach((v, i) => {
+              const x = -120 + i * 34;
+              const h = Math.max(6, v * 0.62);
+              const base = st.y - 30;
+              const fill = i === st.hi ? '#fdba74' : '#bfdbfe';
+              const stroke = i === st.hi ? ORANGE : BLUE;
+              s.rect({
+                center: [x, base + h / 2], width: 24, height: h, cornerRadius: 3,
+                fill, stroke, strokeWidth: 1.2, layer: 2,
+              });
+              text(s, String(v), x, base + h + 10, 9.5, MUTED);
+            });
+          }
+        },
+      });
+
+      /* ------------------------------------------------------------------ */
+      /* 6. Data viz — linear regression                                     */
+      /* ------------------------------------------------------------------ */
+      EXAMPLES.push({
+        id: 'linearreg',
+        title: 'Linear regression',
+        tag: 'dataviz',
+        source: 'dataviz/linearreg',
+        build() {
+          const s = make('stage-linearreg', 16);
+          const data = [
+            [3.09, 1.99], [1.61, 3.45], [2.72, 1.37], [-0.02, 2.01], [3.51, 4.66],
+            [-0.08, 1.64], [-0.22, 3.17], [-4.58, -0.31], [0.59, -0.69], [3.39, 2.75],
+            [-6.35, 0.51], [1.47, 0.89], [-3.95, 0.92], [1.34, 4.33], [6.37, 3.14],
+            [-2.94, 1.07], [-4.04, -0.66], [-1.46, 1.19], [-2.26, 1.62], [6.53, 3.79],
+            [0.70, 3.76], [2.38, 2.50], [1.23, 2.44], [-2.73, 1.11], [1.91, 3.23],
+          ];
+          const scale = 24;
+          s.line({ start: [-230, 0], end: [230, 0], stroke: '#cbd5e1', strokeWidth: 1.2, arrowEnd: true, layer: 1 });
+          s.line({ start: [0, -165], end: [0, 165], stroke: '#cbd5e1', strokeWidth: 1.2, arrowEnd: true, layer: 1 });
+          const n = data.length;
+          const mx = data.reduce((a, p) => a + p[0], 0) / n;
+          const my = data.reduce((a, p) => a + p[1], 0) / n;
+          let cov = 0, varx = 0;
+          for (const [x, y] of data) { cov += (x - mx) * (y - my); varx += (x - mx) ** 2; }
+          const beta = cov / varx;
+          const alpha = my - beta * mx;
+          for (const [x, y] of data) {
+            s.circle({ center: [x * scale, y * scale], r: 3.2, fill: INK, stroke: 'none', layer: 2 });
+          }
+          s.line({
+            start: [-7 * scale, (alpha + beta * -7) * scale],
+            end: [7 * scale, (alpha + beta * 7) * scale],
+            stroke: RED, strokeWidth: 2, arrowEnd: true, layer: 3,
+          });
+          text(s, 'y = ' + beta.toFixed(2) + 'x + ' + alpha.toFixed(2), -220, 150, 11, RED, 5);
+        },
+      });
+
+      /* ------------------------------------------------------------------ */
+      /* 7. Box & arrow — computer architecture                              */
+      /* ------------------------------------------------------------------ */
+      EXAMPLES.push({
+        id: 'computer-architecture',
+        title: 'Computer architecture',
+        tag: 'box-arrow-diagram',
+        source: 'box-arrow-diagram/computer-architecture',
+        build() {
+          const s = make('stage-computer-architecture', 17);
+          const left = [
+            ['Program Counter', 112], ['MAR', 56], ['RAM', 0], ['IR', -56], ['Input', -112],
+          ];
+          const right = [
+            ['Control', 112], ['ALU', 56], ['Registers', 0], ['Flags', -56], ['Output', -112],
+          ];
+          s.rect({ center: [0, 0], width: 24, height: 300, cornerRadius: 10, fill: '#eef2ff', stroke: '#94a3b8', strokeWidth: 1.2, layer: 1 });
+          text(s, 'BUS', 0, 162, 10, MUTED);
+          const box = (x, y, label) => {
+            s.rect({ center: [x, y], width: 116, height: 36, cornerRadius: 7, fill: '#fff', stroke: '#94a3b8', strokeWidth: 1.2, layer: 2 });
+            text(s, label, x, y, 9.5, INK, 5);
+          };
+          for (const [label, y] of left) {
+            box(-155, y, label);
+            s.line({ start: [-97, y], end: [-14, y], stroke: MUTED, strokeWidth: 1.2, arrowEnd: true, layer: 1 });
+          }
+          for (const [label, y] of right) {
+            box(155, y, label);
+            s.line({ start: [14, y], end: [97, y], stroke: MUTED, strokeWidth: 1.2, arrowEnd: true, layer: 1 });
+          }
+        },
+      });
+
+      /* ------------------------------------------------------------------ */
+      /* 8. Hamiltonian cycle                                                */
+      /* ------------------------------------------------------------------ */
+      EXAMPLES.push({
+        id: 'hamiltonian-cycle',
+        title: 'Hamiltonian cycle',
+        tag: 'graph-domain',
+        source: 'graph-domain/other-examples/hamiltonian-cycle',
+        build() {
+          const s = make('stage-hamiltonian-cycle', 18);
+          const labels = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
+          const pos = {};
+          labels.forEach((k, i) => {
+            const a = -Math.PI / 2 + (i * 2 * Math.PI) / labels.length;
+            pos[k] = [Math.cos(a) * 132, Math.sin(a) * 132];
+          });
+          const cycle = [['a','b'],['b','c'],['c','d'],['d','e'],['e','f'],['f','g'],['g','a']];
+          const extras = [['a','c'],['a','d'],['b','e'],['b','f'],['c','g'],['d','f']];
+          for (const [a, b] of extras) {
+            s.line({ start: pos[a], end: pos[b], stroke: '#cbd5e1', strokeWidth: 1.3, strokeDasharray: '5,4', layer: 1 });
+          }
+          for (const [a, b] of cycle) {
+            s.line({ start: pos[a], end: pos[b], stroke: BLUE, strokeWidth: 3, layer: 2 });
+          }
+          for (const k of labels) {
+            s.circle({ center: pos[k], r: 12, fill: '#fff', stroke: INK, strokeWidth: 1.6, layer: 3 });
+            text(s, k, pos[k][0], pos[k][1], 11, INK);
+          }
+          text(s, 'cycle: a–b–c–d–e–f–g–a', -220, 160, 10, BLUE);
+        },
+      });
+
+      /* ------------------------------------------------------------------ */
+      /* 9. Envelopes — nephroid                                             */
+      /* ------------------------------------------------------------------ */
+      EXAMPLES.push({
+        id: 'nephroid',
+        title: 'Nephroid envelope',
+        tag: 'envelopes',
+        source: 'envelopes/nephroid',
+        build() {
+          const s = make('stage-nephroid', 19);
+          const a = 42;
+          const pts = [];
+          const N = 220;
+          for (let i = 0; i <= N; i++) {
+            const t = (i / N) * Math.PI * 2;
+            pts.push([3 * a * Math.cos(t) - a * Math.cos(3 * t), 3 * a * Math.sin(t) - a * Math.sin(3 * t)]);
+          }
+          for (let i = 0; i < N; i++) {
+            const u = i / N;
+            s.line({
+              start: pts[i], end: pts[i + 1],
+              stroke: rgba(0.15 + 0.65 * u, 0.35, 0.92 - 0.55 * u, 0.85),
+              strokeWidth: 2.2,
+              layer: 2,
+            });
+          }
+        },
+      });
+
+      /* ------------------------------------------------------------------ */
+      /* 10. Fractals — Sierpinski chaos game                                */
+      /* ------------------------------------------------------------------ */
+      EXAMPLES.push({
+        id: 'sierpinski',
+        title: 'Sierpiński chaos game',
+        tag: 'fractals',
+        source: 'fractals/chaos-game/sierpinski-triangle',
+        build() {
+          const s = make('stage-sierpinski', 20);
+          const corners = [[0, 145], [-130, -78], [130, -78]];
+          let state = 0x9e3779b9;
+          const rand = () => {
+            state ^= (state << 13) >>> 0; state >>>= 0;
+            state ^= state >>> 17;
+            state ^= (state << 5) >>> 0; state >>>= 0;
+            return state / 4294967296;
+          };
+          let x = 0, y = 0;
+          const colors = ['rgba(47,93,227,0.55)', 'rgba(5,150,105,0.55)', 'rgba(217,119,6,0.55)'];
+          for (let i = 0; i < 700; i++) {
+            const k = Math.floor(rand() * 3);
+            x = (x + corners[k][0]) / 2;
+            y = (y + corners[k][1]) / 2;
+            if (i > 8) {
+              s.circle({ center: [x, y], r: 1.35, fill: colors[k], stroke: 'none', layer: 2 });
+            }
+          }
+          for (const [cx, cy] of corners) {
+            s.circle({ center: [cx, cy], r: 3, fill: INK, stroke: 'none', layer: 3 });
+          }
+        },
+      });
+
+      /* ------------------------------------------------------------------ */
+      /* 11. Group theory — quaternion Cayley graph                          */
+      /* ------------------------------------------------------------------ */
+      EXAMPLES.push({
+        id: 'quaternion',
+        title: 'Quaternion Cayley graph',
+        tag: 'group-theory',
+        source: 'group-theory/quaternion-cayley-graph',
+        build() {
+          const s = make('stage-quaternion', 21);
+          const order = ['1', 'i', '-1', '-i', 'j', 'k', '-j', '-k'];
+          const pos = {};
+          order.forEach((k, i) => {
+            const a = -Math.PI / 2 + (i * 2 * Math.PI) / order.length;
+            pos[k] = [Math.cos(a) * 120, Math.sin(a) * 120];
+          });
+          const cycles = [
+            { color: BLUE, pairs: [['1','i'],['i','-1'],['-1','-i'],['-i','1'],['j','k'],['k','-j'],['-j','-k'],['-k','j']] },
+            { color: GREEN, pairs: [['1','j'],['j','-1'],['-1','-j'],['-j','1'],['i','-k'],['-k','-i'],['-i','k'],['k','i']] },
+            { color: ORANGE, pairs: [['1','k'],['k','-1'],['-1','-k'],['-k','1'],['i','j'],['j','-i'],['-i','-j'],['-j','i']] },
+          ];
+          const seen = new Set();
+          for (const c of cycles) {
+            for (const [a, b] of c.pairs) {
+              const key = [a, b].sort().join('|');
+              if (seen.has(key)) continue;
+              seen.add(key);
+              s.line({ start: pos[a], end: pos[b], stroke: c.color, strokeWidth: 2, layer: 1 });
+            }
+          }
+          for (const k of order) {
+            s.circle({ center: pos[k], r: 14, fill: '#fff', stroke: INK, strokeWidth: 1.5, layer: 3 });
+            text(s, k, pos[k][0], pos[k][1], k.length > 1 ? 9.5 : 12, INK);
+          }
+          text(s, 'generators: i', -230, 160, 10, BLUE);
+          text(s, 'j', -180, 160, 10, GREEN);
+          text(s, 'k', -150, 160, 10, ORANGE);
+        },
+      });
+
+      /* ------------------------------------------------------------------ */
+      /* 12. Spectral graphs — hypercube                                     */
+      /* ------------------------------------------------------------------ */
+      EXAMPLES.push({
+        id: 'hypercube',
+        title: '4D hypercube projection',
+        tag: 'spectral-graphs',
+        source: 'spectral-graphs/examples/hypercube',
+        build() {
+          const s = make('stage-hypercube', 22);
+          const cube = (scale, dx, dy) => {
+            const out = [];
+            let i = 0;
+            for (const x of [-1, 1]) for (const y of [-1, 1]) for (const z of [-1, 1]) {
+              out[i++] = [dx + (x - 0.55 * z) * scale, dy + (y - 0.3 * z) * scale];
+            }
+            return out;
+          };
+          const inner = cube(42, 0, 0);
+          const outer = cube(92, 0, 0);
+          const cubeEdges = [];
+          for (let i = 0; i < 8; i++) {
+            for (let b = 0; b < 3; b++) {
+              const j = i ^ (1 << b);
+              if (i < j) cubeEdges.push([i, j]);
+            }
+          }
+          for (const [i, j] of cubeEdges) {
+            s.line({ start: inner[i], end: inner[j], stroke: '#93c5fd', strokeWidth: 1.6, layer: 1 });
+            s.line({ start: outer[i], end: outer[j], stroke: '#93c5fd', strokeWidth: 1.6, layer: 1 });
+            s.line({ start: inner[i], end: outer[i], stroke: '#f59e0b', strokeWidth: 1.2, layer: 1 });
+          }
+          for (let i = 0; i < 8; i++) {
+            s.circle({ center: inner[i], r: 4, fill: BLUE, stroke: '#fff', strokeWidth: 1, layer: 3 });
+            s.circle({ center: outer[i], r: 4, fill: ORANGE, stroke: '#fff', strokeWidth: 1, layer: 3 });
+          }
+        },
+      });
+
+      /* ------------------------------------------------------------------ */
+      /* 13. Structural formula — caffeine (static thumbnail)                */
+      /* ------------------------------------------------------------------ */
+      EXAMPLES.push({
+        id: 'caffeine',
+        title: 'Caffeine structural formula',
+        tag: 'structural-formula',
+        source: 'structural-formula/molecules/caffeine',
+        build() {
+          const s = make('stage-caffeine', 23);
+          const P = {
+            C1: [-145, 80], C2: [-70, -40], C3: [0, -155], C4: [0, 80], C5: [70, 40], C6: [70, -40],
+            C7: [175, 135], C8: [200, 0], N1: [0, -80], N2: [-70, 40], N3: [140, 60], N4: [140, -60],
+            O1: [0, 160], O2: [-105, -120], H1: [285, 0], H2: [235, 175], H3: [230, 105], H4: [150, 215],
+            H5: [-215, 105], H6: [-210, 40], H7: [-140, 150], H8: [-50, -215], H9: [50, -215], H10: [0, -245],
+          };
+          const k = 0.52;
+          const at = (id) => [P[id][0] * k, P[id][1] * k];
+          const singles = [
+            ['N2','C4'],['C4','C5'],['C6','N1'],['N1','C2'],['N2','C2'],['N2','C1'],['C1','H7'],
+            ['C1','H6'],['C1','H5'],['C7','H4'],['C7','H3'],['H2','C7'],['N3','C7'],['N3','C5'],
+            ['C8','N3'],['N4','C6'],['C8','H1'],['C3','H10'],['C3','H8'],['C3','H9'],['N1','C3'],
+          ];
+          const doubles = [['C5','C6'],['C2','O2'],['C4','O1'],['C8','N4']];
+          for (const [a, b] of singles) {
+            s.line({ start: at(a), end: at(b), stroke: '#94a3b8', strokeWidth: 3.2, layer: 1 });
+          }
+          for (const [a, b] of doubles) {
+            const [ax, ay] = at(a), [bx, by] = at(b);
+            const dx = bx - ax, dy = by - ay;
+            const len = Math.hypot(dx, dy) || 1;
+            const ox = (-dy / len) * 2.2, oy = (dx / len) * 2.2;
+            for (const sgn of [-1, 1]) {
+              s.line({
+                start: [ax + ox * sgn, ay + oy * sgn],
+                end: [bx + ox * sgn, by + oy * sgn],
+                stroke: '#94a3b8', strokeWidth: 2.4, layer: 1,
+              });
+            }
+          }
+          const style = {
+            C: { r: 12, fill: '#fff', stroke: INK, label: '' },
+            N: { r: 12.5, fill: '#eef2ff', stroke: BLUE, label: 'N' },
+            O: { r: 12.5, fill: '#fef2f2', stroke: RED, label: 'O' },
+            H: { r: 8, fill: '#f8fafc', stroke: MUTED, label: 'H' },
+          };
+          for (const id of Object.keys(P)) {
+            const [x, y] = at(id);
+            const st = style[id[0]];
+            s.circle({ center: [x, y], r: st.r, fill: st.fill, stroke: st.stroke, strokeWidth: 1.6, layer: 3 });
+            if (st.label) text(s, st.label, x, y, st.r > 10 ? 7.5 : 6, INK);
+          }
+          text(s, 'caffeine · C8H10N4O2', 0, 152, 9, MUTED);
+        },
+      });
+
+      /* ------------------------------------------------------------------ */
+      /* Build cards                                                         */
+      /* ------------------------------------------------------------------ */
+      const grid = document.getElementById('grid');
+      for (const ex of EXAMPLES) {
+        const card = document.createElement('article');
+        card.className = 'card';
+        card.innerHTML =
+          '<div class="card-head"><h2>' + ex.title + '</h2><span class="tag">' + ex.tag + '</span></div>' +
+          '<div class="stage" id="stage-' + ex.id + '"></div>' +
+          '<div class="card-foot"><span>KiteScene · 520×360</span>' +
+          '<a href="https://github.com/penrose/penrose/tree/main/packages/examples/src/' + ex.source + '">source ↗</a></div>';
+        grid.appendChild(card);
+      }
+      for (const ex of EXAMPLES) ex.build();
+
+      window.__GALLERY = { scenes, examples: EXAMPLES.map((e) => e.id) };
+    </script>
+  </body>
+</html>

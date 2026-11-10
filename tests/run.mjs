@@ -431,6 +431,31 @@ try {
   );
   check('SF: no page errors', pageErrors.length === 0, pageErrors.join(' | '));
 
+  console.log('\nPenrose examples gallery');
+  pageErrors.length = 0;
+  await page.goto(`http://127.0.0.1:${port}/examples/penrose-gallery.html`, { waitUntil: 'load' });
+  await page.waitForTimeout(1800);
+  const gallery = await page.evaluate(() => {
+    const g = window.__GALLERY;
+    const stages = [...document.querySelectorAll('.stage')];
+    return {
+      examples: g ? g.examples.length : 0,
+      scenes: g ? g.scenes.length : 0,
+      cards: document.querySelectorAll('.card').length,
+      svgs: document.querySelectorAll('.stage svg').length,
+      nonEmpty: stages.filter((st) => st.querySelector('svg') && st.querySelectorAll('svg *').length > 5).length,
+      sierpinski: document.querySelectorAll('#stage-sierpinski circle').length,
+      caffeine: document.querySelectorAll('#stage-caffeine circle').length,
+      regression: [...document.querySelectorAll('#stage-linearreg line')].filter((l) => l.getAttribute('stroke') === '#dc2626').length,
+      halfAdder: [...document.querySelectorAll('#stage-half-adder text')].map((t) => t.textContent).join('|'),
+    };
+  });
+  check('gallery: 13 example cards / Kite scenes', gallery.examples === 13 && gallery.scenes === 13 && gallery.cards === 13 && gallery.svgs === 13, JSON.stringify(gallery));
+  check('gallery: every scene rendered', gallery.nonEmpty === 13, JSON.stringify(gallery));
+  check('gallery: chaos game + caffeine + regression content', gallery.sierpinski > 690 && gallery.caffeine === 24 && gallery.regression === 1, JSON.stringify(gallery));
+  check('gallery: half-adder labels', gallery.halfAdder.includes('XOR') && gallery.halfAdder.includes('AND'), gallery.halfAdder);
+  check('gallery: no page errors', pageErrors.length === 0, pageErrors.join(' | '));
+
   console.log(`\n${passes.length} passed, ${failures.length} failed`);
   if (failures.length) {
     console.log('\nFailures:');
