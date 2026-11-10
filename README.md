@@ -106,7 +106,7 @@ export PLAYWRIGHT_CORE="/path/to/playwright-core/index.mjs"
 5. **Spatial hash stress (보조)** — 36개 원, 630개 `disjoint` 쌍.
    32쌍 초과 시 균일 격자 광역 단계가 활성 쌍만 XPBD에 투입하는지 검증.
 
-현재 결과: **단위 테스트 16개 + 브라우저 인수 검증 64개 통과.**
+현재 결과: **단위 테스트 16개 + 브라우저 인수 검증 65개 통과.**
 
 ---
 
@@ -301,7 +301,7 @@ Penrose Style 프로그램을 규칙 단위로 옮길 수 있도록 다음을 �
 
 ### 예제
 
-- [`examples/penrose-gallery.html`](./examples/penrose-gallery.html) — Penrose examples 13개 포팅 갤러리 (노드 드래그 + 배경 팬)
+- [`examples/penrose-gallery.html`](./examples/penrose-gallery.html) — Penrose examples 13개 포팅 갤러리 (노드 드래그 + 배경 팬, 카드별 ensure/encourage 개수 표시)
 - [`examples/structural-formula.html`](./examples/structural-formula.html) — Penrose
   structural-formula 트리오의 규칙 단위 포트. 원자 좌표는 자유 변수이고 결합 길이·물 결합각·반발을
   `encourage`로 풉니다. H₂O / NaCl을 런타임에 추가할 수 있습니다.
@@ -332,7 +332,7 @@ kite.min.js              esbuild로 minify한 배포용 단일 파일
 kite.d.ts                TypeScript 선언
 index.html               인터랙티브 데모
 examples/*.js            추가 예시 6개 (사인, 상자, 링크, 직각, 렌즈, 구슬)
-examples/penrose-gallery.html   Penrose examples 13개 포팅 갤러리 (노드 드래그 + 배경 팬)
+examples/penrose-gallery.html   Penrose examples 13개 포팅 갤러리 (노드 드래그 + 배경 팬, 카드별 ensure/encourage 개수 표시)
 examples/structural-formula.{html,js}  Penrose structural-formula 포트
 examples/caffeine.html   고정 좌표 caffeine 예제
 tests/unit-node.mjs      DOM 없는 단위 테스트

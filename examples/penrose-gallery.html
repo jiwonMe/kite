@@ -280,6 +280,9 @@
           }
           for (const list of groups.values()) {
             const n = list.length;
+            const [ea, eb] = list[0];
+            const target = Math.hypot(Q[ea][0] - Q[eb][0], Q[ea][1] - Q[eb][1]);
+            encourage`${ops.norm(ops.vsub(P[ea], P[eb]))} == ${target}`;
             list.forEach(([a, b], idx) => {
               const [ax, ay] = Q[a];
               const [bx, by] = Q[b];
@@ -296,6 +299,12 @@
           for (const name of Object.keys(P)) {
             s.circle({ center: P[name], r: 9, fill: '#fff', stroke: INK, strokeWidth: 1.6, drag: true, layer: 3 });
             text(s, name, ...plus(P[name], 0, -17), 10.5, INK, 5);
+          }
+          const names = Object.keys(P);
+          for (let i = 0; i < names.length; i++) {
+            for (let j = i + 1; j < names.length; j++) {
+              ensure(ops.disjoint({ center: P[names[i]], r: 9 }, { center: P[names[j]], r: 9 }, 8));
+            }
           }
         },
       });
@@ -342,6 +351,12 @@
           s.circle({ center: OUT2, r: 13, fill: '#fff', stroke: INK, layer: 2 });
           text(s, 'S', ...OUT1, 11, INK);
           text(s, 'C', ...OUT2, 11, INK);
+          const gates = [P.s1, P.s2, P.xor, P.and];
+          for (let i = 0; i < gates.length; i++) {
+            for (let j = i + 1; j < gates.length; j++) {
+              ensure(ops.disjoint({ center: gates[i], r: 42 }, { center: gates[j], r: 42 }, 6));
+            }
+          }
         },
       });
 
@@ -439,15 +454,23 @@
             s.rect({ center: p, width: 116, height: 36, cornerRadius: 7, fill: '#fff', stroke: '#94a3b8', strokeWidth: 1.2, drag: true, layer: 2 });
             text(s, label, ...p, 9.5, INK, 5);
           };
+          const boxes = [];
           for (const [label, y] of left) {
             const p = vpos(s, -155, y);
             box(p, label);
+            boxes.push(p);
             s.line({ start: plus(p, 58, 0), end: [-14, p[1]], stroke: MUTED, strokeWidth: 1.2, arrowEnd: true, layer: 1 });
           }
           for (const [label, y] of right) {
             const p = vpos(s, 155, y);
             box(p, label);
+            boxes.push(p);
             s.line({ start: [14, p[1]], end: plus(p, -58, 0), stroke: MUTED, strokeWidth: 1.2, arrowEnd: true, layer: 1 });
+          }
+          for (let i = 0; i < boxes.length; i++) {
+            for (let j = i + 1; j < boxes.length; j++) {
+              ensure(ops.disjoint({ center: boxes[i], r: 22 }, { center: boxes[j], r: 22 }, 4));
+            }
           }
         },
       });
@@ -476,9 +499,28 @@
           for (const [a, b] of cycle) {
             s.line({ start: pos[a], end: pos[b], stroke: BLUE, strokeWidth: 3, layer: 2 });
           }
+          const seenEdges = new Set();
+          for (const [a, b] of [...cycle, ...extras]) {
+            const key = [a, b].sort().join('|');
+            if (seenEdges.has(key)) continue;
+            seenEdges.add(key);
+            const qa = pos[a], qb = pos[b];
+            const target = Math.hypot(
+              Math.cos(-Math.PI / 2 + labels.indexOf(a) * 2 * Math.PI / labels.length) * 132 -
+                Math.cos(-Math.PI / 2 + labels.indexOf(b) * 2 * Math.PI / labels.length) * 132,
+              Math.sin(-Math.PI / 2 + labels.indexOf(a) * 2 * Math.PI / labels.length) * 132 -
+                Math.sin(-Math.PI / 2 + labels.indexOf(b) * 2 * Math.PI / labels.length) * 132,
+            );
+            encourage`${ops.norm(ops.vsub(qa, qb))} == ${target}`;
+          }
           for (const k of labels) {
             s.circle({ center: pos[k], r: 12, fill: '#fff', stroke: INK, strokeWidth: 1.6, drag: true, layer: 3 });
             text(s, k, ...pos[k], 11, INK);
+          }
+          for (let i = 0; i < labels.length; i++) {
+            for (let j = i + 1; j < labels.length; j++) {
+              ensure(ops.disjoint({ center: pos[labels[i]], r: 12 }, { center: pos[labels[j]], r: 12 }, 8));
+            }
           }
           text(s, 'cycle: a–b–c–d–e–f–g–a', -220, 160, 10, BLUE);
         },
@@ -574,12 +616,24 @@
               const key = [a, b].sort().join('|');
               if (seen.has(key)) continue;
               seen.add(key);
+              const target = Math.hypot(
+                Math.cos(-Math.PI / 2 + order.indexOf(a) * 2 * Math.PI / order.length) * 120 -
+                  Math.cos(-Math.PI / 2 + order.indexOf(b) * 2 * Math.PI / order.length) * 120,
+                Math.sin(-Math.PI / 2 + order.indexOf(a) * 2 * Math.PI / order.length) * 120 -
+                  Math.sin(-Math.PI / 2 + order.indexOf(b) * 2 * Math.PI / order.length) * 120,
+              );
+              encourage`${ops.norm(ops.vsub(pos[a], pos[b]))} == ${target}`;
               s.line({ start: pos[a], end: pos[b], stroke: c.color, strokeWidth: 2, layer: 1 });
             }
           }
           for (const k of order) {
             s.circle({ center: pos[k], r: 14, fill: '#fff', stroke: INK, strokeWidth: 1.5, drag: true, layer: 3 });
             text(s, k, ...pos[k], k.length > 1 ? 9.5 : 12, INK);
+          }
+          for (let i = 0; i < order.length; i++) {
+            for (let j = i + 1; j < order.length; j++) {
+              ensure(ops.disjoint({ center: pos[order[i]], r: 14 }, { center: pos[order[j]], r: 14 }, 8));
+            }
           }
           text(s, 'generators: i', -230, 160, 10, BLUE);
           text(s, 'j', -180, 160, 10, GREEN);
@@ -614,14 +668,25 @@
               if (i < j) cubeEdges.push([i, j]);
             }
           }
+          const dist = (u, v) => Math.hypot(s._val(u[0]) - s._val(v[0]), s._val(u[1]) - s._val(v[1]));
           for (const [i, j] of cubeEdges) {
             s.line({ start: inner[i], end: inner[j], stroke: '#93c5fd', strokeWidth: 1.6, layer: 1 });
             s.line({ start: outer[i], end: outer[j], stroke: '#93c5fd', strokeWidth: 1.6, layer: 1 });
             s.line({ start: inner[i], end: outer[i], stroke: '#f59e0b', strokeWidth: 1.2, layer: 1 });
+            encourage`${ops.norm(ops.vsub(inner[i], inner[j]))} == ${dist(inner[i], inner[j])}`;
+            encourage`${ops.norm(ops.vsub(outer[i], outer[j]))} == ${dist(outer[i], outer[j])}`;
+            encourage`${ops.norm(ops.vsub(inner[i], outer[i]))} == ${dist(inner[i], outer[i])}`;
           }
+          const all = [];
           for (let i = 0; i < 8; i++) {
+            all.push(inner[i], outer[i]);
             s.circle({ center: inner[i], r: 4, fill: BLUE, stroke: '#fff', strokeWidth: 1, drag: true, layer: 3 });
             s.circle({ center: outer[i], r: 4, fill: ORANGE, stroke: '#fff', strokeWidth: 1, drag: true, layer: 3 });
+          }
+          for (let i = 0; i < all.length; i++) {
+            for (let j = i + 1; j < all.length; j++) {
+              ensure(ops.disjoint({ center: all[i], r: 4 }, { center: all[j], r: 4 }, 4));
+            }
           }
         },
       });
@@ -675,6 +740,15 @@
             O: { r: 12.5, fill: '#fef2f2', stroke: RED, label: 'O' },
             H: { r: 8, fill: '#f8fafc', stroke: MUTED, label: 'H' },
           };
+          for (const [a, b] of [...singles, ...doubles]) {
+            const target = Math.hypot(P[a][0] - P[b][0], P[a][1] - P[b][1]) * k;
+            encourage`${ops.norm(ops.vsub(at(a), at(b)))} == ${target}`;
+            ensure(ops.disjoint(
+              { center: at(a), r: style[a[0]].r },
+              { center: at(b), r: style[b[0]].r },
+              1,
+            ));
+          }
           for (const id of Object.keys(P)) {
             const [x, y] = at(id);
             const st = style[id[0]];
@@ -704,8 +778,22 @@
       }
       await Promise.all(scenes.map((sc) => sc.mount()));
       for (const sc of scenes) enablePan(sc);
+      EXAMPLES.forEach((ex, i) => {
+        const sc = scenes[i];
+        const hard = sc.constraints.filter((c) => c.compliance === 0).length;
+        const soft = sc.constraints.length - hard;
+        const foot = document.querySelector('#stage-' + ex.id).closest('.card').querySelector('.card-foot span');
+        foot.textContent = 'KiteScene · ensure ' + hard + ' · encourage ' + soft;
+      });
 
-      window.__GALLERY = { scenes, examples: EXAMPLES.map((e) => e.id) };
+      window.__GALLERY = {
+        scenes,
+        examples: EXAMPLES.map((e) => e.id),
+        constraints: scenes.map((sc) => ({
+          hard: sc.constraints.filter((c) => c.compliance === 0).length,
+          soft: sc.constraints.filter((c) => c.compliance > 0).length,
+        })),
+      };
     </script>
   </body>
 </html>

@@ -448,12 +448,23 @@ try {
       caffeine: document.querySelectorAll('#stage-caffeine circle').length,
       regression: [...document.querySelectorAll('#stage-linearreg line')].filter((l) => l.getAttribute('stroke') === '#dc2626').length,
       halfAdder: [...document.querySelectorAll('#stage-half-adder text')].map((t) => t.textContent).join('|'),
+      constraints: g ? g.constraints : [],
     };
   });
   check('gallery: 13 example cards / Kite scenes', gallery.examples === 13 && gallery.scenes === 13 && gallery.cards === 13 && gallery.svgs === 13, JSON.stringify(gallery));
   check('gallery: every scene rendered', gallery.nonEmpty === 13, JSON.stringify(gallery));
   check('gallery: chaos game + caffeine + regression content', gallery.sierpinski > 690 && gallery.caffeine === 24 && gallery.regression === 1, JSON.stringify(gallery));
   check('gallery: half-adder labels', gallery.halfAdder.includes('XOR') && gallery.halfAdder.includes('AND'), gallery.halfAdder);
+  check(
+    'gallery: ensure/encourage constraints are actually used',
+    gallery.constraints[0].hard >= 5 &&
+      gallery.constraints[2].hard >= 20 &&
+      gallery.constraints[6].hard >= 40 &&
+      gallery.constraints[7].hard >= 20 &&
+      gallery.constraints[10].hard >= 20 &&
+      gallery.constraints[12].soft >= 20,
+    JSON.stringify(gallery.constraints),
+  );
 
   // A graph node drags its circle, label and incident edges together.
   const dragGalleryNode = async () => {
