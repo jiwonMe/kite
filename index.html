@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kite — zero-build diagram engine</title>
+    <style>
+      :root {
+        --ink: #111827;
+        --muted: #667085;
+        --faint: #98a2b3;
+        --line: #e4e7ec;
+        --paper: #f7f8fa;
+        --card: #ffffff;
+        --accent: #2f5de3;
+        --accent-soft: #eef2ff;
+        --warm: #c2410c;
+        --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        --sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+      }
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        color: var(--ink);
+        background:
+          radial-gradient(1200px 600px at 80% -10%, #eef2ff 0%, transparent 60%),
+          linear-gradient(var(--paper), var(--paper));
+        font-family: var(--sans);
+        font-feature-settings: "ss01", "cv11";
+        -webkit-font-smoothing: antialiased;
+      }
+      a { color: inherit; }
+      .shell { max-width: 1240px; margin: 0 auto; padding: 0 32px; }
+      header { padding: 30px 0 8px; }
+      .nav { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+      .brand { display: flex; align-items: center; gap: 10px; font-weight: 650; letter-spacing: -0.02em; }
+      .mark {
+        width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center;
+        background: var(--ink); color: #fff; font-size: 15px; transform: rotate(-4deg);
+        box-shadow: 0 6px 18px rgba(17, 24, 39, 0.18);
+      }
+      .nav-links { display: flex; gap: 22px; font-size: 13px; color: var(--muted); }
+      .nav-links a { text-decoration: none; }
+      .nav-links a:hover { color: var(--ink); }
+      .hero { padding: 68px 0 34px; display: grid; grid-template-columns: 1.02fr 0.98fr; gap: 56px; align-items: center; }
+      .eyebrow {
+        display: inline-flex; align-items: center; gap: 8px; font-family: var(--mono);
+        font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent);
+        background: var(--accent-soft); border: 1px solid #dbe4ff; padding: 6px 10px; border-radius: 999px;
+      }
+      .eyebrow::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px #dbe4ff; }
+      h1 {
+        margin: 22px 0 18px; font-family: var(--serif); font-weight: 500;
+        font-size: clamp(52px, 6.3vw, 88px); line-height: 0.94; letter-spacing: -0.055em;
+      }
+      h1 em { font-style: italic; color: var(--accent); }
+      .lede { margin: 0 0 26px; max-width: 54ch; font-size: 16px; line-height: 1.7; color: var(--muted); }
+      .lede code { font-family: var(--mono); font-size: 0.88em; background: #eef1f6; padding: 2px 5px; border-radius: 5px; color: #344054; }
+      .hero-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+      .btn {
+        display: inline-flex; align-items: center; gap: 8px; border-radius: 10px; padding: 11px 16px;
+        font-size: 13px; font-weight: 600; text-decoration: none; border: 1px solid transparent; cursor: pointer;
+        transition: transform 120ms ease, box-shadow 120ms ease;
+      }
+      .btn:hover { transform: translateY(-1px); }
+      .btn-primary { background: var(--ink); color: #fff; box-shadow: 0 8px 22px rgba(17, 24, 39, 0.18); }
+      .btn-ghost { background: #fff; border-color: var(--line); color: #344054; }
+      .hero-figure { position: relative; }
+      .stage-card {
+        background: var(--card); border: 1px solid var(--line); border-radius: 22px;
+        box-shadow: 0 30px 80px rgba(16, 24, 40, 0.09), 0 2px 0 rgba(16, 24, 40, 0.03);
+        overflow: hidden;
+      }
+      .stage-card-head {
+        display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        padding: 13px 16px; border-bottom: 1px solid #edf0f4; font-family: var(--mono);
+        font-size: 11px; color: var(--faint); letter-spacing: 0.03em;
+      }
+      .dots { display: flex; gap: 5px; }
+      .dots span { width: 7px; height: 7px; border-radius: 50%; background: #e4e7ec; }
+      .dots span:first-child { background: #fca5a5; }
+      .dots span:nth-child(2) { background: #fcd34d; }
+      .dots span:nth-child(3) { background: #86efac; }
+      .stage { position: relative; }
+      .stage svg { display: block; width: 100%; height: auto; }
+      .hint {
+        position: absolute; left: 14px; bottom: 12px; font-family: var(--mono); font-size: 10.5px;
+        color: #667085; background: rgba(255, 255, 255, 0.84); border: 1px solid #eaecf0;
+        padding: 5px 8px; border-radius: 7px; pointer-events: none; backdrop-filter: blur(6px);
+      }
+      .axis-note { position: absolute; right: 14px; top: 12px; font-family: var(--mono); font-size: 10px; color: #b0b8c4; }
+      .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; }
+      .metric { background: #fff; border: 1px solid var(--line); border-radius: 13px; padding: 12px 13px; }
+      .metric b { display: block; font-family: var(--mono); font-size: 15px; font-weight: 600; letter-spacing: -0.02em; }
+      .metric span { font-size: 10.5px; color: var(--faint); letter-spacing: 0.04em; text-transform: uppercase; }
+      .section { padding: 78px 0 0; }
+      .section-head { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 22px; }
+      .section h2 { margin: 0; font-family: var(--serif); font-size: 38px; font-weight: 500; letter-spacing: -0.04em; }
+      .section p { margin: 6px 0 0; color: var(--muted); font-size: 14px; max-width: 62ch; line-height: 1.65; }
+      .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
+      .demo-card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; box-shadow: 0 16px 50px rgba(16, 24, 40, 0.05); }
+      .demo-body { padding: 18px 18px 16px; }
+      .demo-title { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+      .demo-title h3 { margin: 0; font-size: 15px; letter-spacing: -0.015em; }
+      .chip { font-family: var(--mono); font-size: 10px; color: var(--accent); background: var(--accent-soft); border: 1px solid #dbe4ff; padding: 3px 7px; border-radius: 6px; white-space: nowrap; }
+      .demo-body p { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.6; }
+      .mini-stage { background: #fbfcfe; border-bottom: 1px solid #eef1f5; }
+      .mini-stage svg { display: block; width: 100%; height: auto; }
+      .code-card {
+        margin-top: 24px; background: #0f172a; color: #dbe4f3; border-radius: 18px; overflow: hidden;
+        box-shadow: 0 24px 70px rgba(15, 23, 42, 0.22);
+      }
+      .code-head { display: flex; justify-content: space-between; padding: 12px 18px; border-bottom: 1px solid rgba(255,255,255,0.08); font-family: var(--mono); font-size: 10.5px; color: #94a3b8; }
+      pre { margin: 0; padding: 20px 22px; overflow: auto; font-family: var(--mono); font-size: 12px; line-height: 1.85; }
+      .k { color: #93c5fd; } .s { color: #86efac; } .c { color: #64748b; } .n { color: #fca5a5; }
+      .invariants { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 26px; }
+      .inv { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+      .inv b { display: block; font-family: var(--mono); font-size: 10px; color: var(--accent); letter-spacing: 0.08em; margin-bottom: 7px; }
+      .inv span { display: block; font-size: 12.5px; color: #475467; line-height: 1.55; }
+      .dsl-wrap { display: grid; grid-template-columns: 1fr 1.1fr; gap: 22px; align-items: stretch; }
+      .dsl-card { background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 20px; }
+      .dsl-card h3 { margin: 0 0 10px; font-size: 15px; }
+      .dsl-card p { margin: 0 0 14px; font-size: 12.5px; color: var(--muted); line-height: 1.65; }
+      .dsl-card pre { background: #f8fafc; color: #334155; border: 1px solid #eef1f5; border-radius: 10px; font-size: 11.5px; padding: 14px 15px; }
+      footer { margin-top: 92px; border-top: 1px solid var(--line); padding: 26px 0 46px; color: var(--faint); font-size: 12px; display: flex; justify-content: space-between; gap: 24px; }
+      footer a { color: #475467; text-decoration: none; }
+      .add-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+      .small { font-size: 11.5px; color: var(--muted); }
+      @media (max-width: 980px) {
+        .hero, .grid-2, .dsl-wrap { grid-template-columns: 1fr; }
+        .hero { padding-top: 40px; gap: 34px; }
+        .section-head { display: block; }
+        .invariants { grid-template-columns: 1fr 1fr; }
+      }
+      @media (max-width: 620px) {
+        .shell { padding: 0 18px; }
+        h1 { font-size: 54px; }
+        .invariants { grid-template-columns: 1fr; }
+        .metrics { grid-template-columns: 1fr 1fr; }
+        .nav-links { display: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="shell">
+      <nav class="nav">
+        <div class="brand"><span class="mark">◇</span> Kite</div>
+        <div class="nav-links">
+          <a href="#play">Playground</a>
+          <a href="#api">API</a>
+          <a href="#diagram">&lt;kite-diagram&gt;</a>
+          <a href="tests/acceptance.html">Acceptance tests</a>
+        </div>
+      </nav>
+    </header>
+
+    <main class="shell">
+      <section class="hero" id="play">
+        <div>
+          <span class="eyebrow">RFC-0001 · zero build · zero headers</span>
+          <h1>Declarative diagrams that <em>pull</em> themselves into shape.</h1>
+          <p class="lede">
+            Kite는 Penrose의 Trio(도메인 · 서브스턴스 · 스타일) 철학을 단일 ES 모듈로 재설계한
+            다이어그램 엔진입니다. <code>ensure</code>는 하드 제약, 마우스는 유한 컴플라이언스
+            소프트 제약으로 취급되어 XPBD 솔버가 매 프레임 마우스를 제약 다양체 위로 정사영합니다.
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="tests/acceptance.html">인수 테스트 실행 →</a>
+            <a class="btn btn-ghost" href="#api">API 살펴보기</a>
+          </div>
+        </div>
+        <div class="hero-figure">
+          <div class="stage-card">
+            <div class="stage-card-head">
+              <span>orbit.kite — manifold projection</span>
+              <span class="dots"><span></span><span></span><span></span></span>
+            </div>
+            <div class="stage" id="orbit-stage">
+              <div class="axis-note">drag the blue planet</div>
+            </div>
+          </div>
+          <div class="metrics">
+            <div class="metric"><b id="orbit-error">0.000</b><span>max error</span></div>
+            <div class="metric"><b id="orbit-status">sleep</b><span>solver state</span></div>
+            <div class="metric"><b id="orbit-count">1</b><span>hard constraint</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <div>
+            <h2>Two ways to get dragged.</h2>
+            <p>상수를 자유 변수로 승격하는 Auto-Slacking, 그리고 도형을 함께 끌고 가는 하드 등식. 둘 다 별도 콜백 없이 선언만으로 동작합니다.</p>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="demo-card">
+            <div class="mini-stage" id="slack-stage"></div>
+            <div class="demo-body">
+              <div class="demo-title"><h3>Auto-Slacking</h3><span class="chip">derived coord + drag</span></div>
+              <p>c2.center = [c1.x + 80, c1.y]. 어느 원을 잡아도 80px 간격이 유지됩니다.</p>
+            </div>
+          </div>
+          <div class="demo-card">
+            <div class="mini-stage" id="euler-stage"></div>
+            <div class="demo-body">
+              <div class="demo-title"><h3>Euler diagram</h3><span class="chip">subtyping · contains · disjoint</span></div>
+              <p>다중 상속 타입과 비트마스크 매칭. 내부 집합을 끌어도 A 밖으로 빠져나가지 않습니다.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <div>
+            <h2>Append, don’t rebuild.</h2>
+            <p>런타임에 새 Substance 인스턴스를 추가해도 기존 변수는 그대로입니다. 새 규칙 일치만 실행되어 바이트코드 테이프 끝에 증분 추가됩니다.</p>
+          </div>
+        </div>
+        <div class="demo-card">
+          <div class="mini-stage" id="dynamic-stage"></div>
+          <div class="demo-body">
+            <div class="demo-title"><h3>Incremental topology</h3><span class="chip">scene.step()</span></div>
+            <div class="add-row">
+              <button class="btn btn-primary" id="add-planet">행성 추가</button>
+              <span class="small" id="planet-count">3 bodies · 3 pair constraints</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="api">
+        <div class="section-head">
+          <div>
+            <h2>One file. Four ideas.</h2>
+            <p>Template JIT · flat tape autodiff · inline Blob worker · fine-grained SVG patch. 외부 런타임도, 헤더 설정도 필요 없습니다.</p>
+          </div>
+        </div>
+        <div class="code-card">
+          <div class="code-head"><span>example.js</span><span>ES2022 · 0 dependencies</span></div>
+<pre><span class="k">import</span> { scene, $, ensure, ops } <span class="k">from</span> <span class="s">"./kite.js"</span>;
+
+<span class="k">const</span> s = scene(<span class="s">"#stage"</span>, { width: <span class="n">600</span>, height: <span class="n">600</span> });
+
+<span class="k">const</span> orbit = s.circle({ center: [<span class="n">0</span>, <span class="n">0</span>], r: <span class="n">150</span>, fill: <span class="s">"none"</span> });
+<span class="k">const</span> planet = s.circle({ center: [<span class="n">150</span>, <span class="n">0</span>], r: <span class="n">18</span>, drag: <span class="k">true</span> });
+
+<span class="c">// A hard equality: the planet is projected onto the circle every frame.</span>
+ensure`${ops.dist(planet.center, orbit.center)} == ${orbit.r}`;
+
+<span class="c">// Mouse pull is a finite-compliance soft constraint. No dragConstraint callback.</span>
+<span class="k">await</span> s.mount();</pre>
+        </div>
+        <div class="invariants">
+          <div class="inv"><b>01 / ZERO BUILD</b><span>단일 <code>kite.js</code>. npm, 번들러, wasm, 별도 worker 파일 없음.</span></div>
+          <div class="inv"><b>02 / ZERO HEADER</b><span>COOP/COEP 없이 Blob Worker + Transferable ArrayBuffer 핑퐁.</span></div>
+          <div class="inv"><b>03 / TAPE JIT</b><span><code>TemplateStringsArray</code>를 WeakMap 키로 쓰는 O(1) 파싱 캐시.</span></div>
+          <div class="inv"><b>04 / AUTO-SLACK</b><span><code>drag: true</code> + 파생 좌표 → 자유 변수 + 하드 등식 자동 삽입.</span></div>
+          <div class="inv"><b>05 / MANIFOLD</b><span>소프트 마우스 인력 → 하드 제약 정사영. 사영 콜백 불필요.</span></div>
+          <div class="inv"><b>06 / INCREMENTAL</b><span><code>scene.step()</code>은 새 조합만 실행하고 테이프에 append.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="diagram">
+        <div class="section-head">
+          <div>
+            <h2>A custom element, too.</h2>
+            <p>스크립트를 로드하면 <code>&lt;kite-diagram&gt;</code>이 자동 등록됩니다. 태그 안의 미니 DSL은 동일한 <code>KiteScene</code> API 호출로 컴파일됩니다.</p>
+          </div>
+        </div>
+        <div class="dsl-wrap">
+          <div class="dsl-card">
+            <h3>Declarative markup</h3>
+            <p>2D 데카르트 좌표계. y축은 렌더링 시에만 반전되므로 텍스트는 뒤집히지 않습니다.</p>
+<pre>&lt;kite-diagram width="720" height="360"&gt;
+  canvas 720 360
+  orbit 0 0 118 16
+  circle -235 88 38 fill=#fde68a stroke=#d97706
+  text -235 88 "zero-build"
+  line -160 88 -60 16 arrow
+&lt;/kite-diagram&gt;</pre>
+          </div>
+          <div class="stage-card">
+            <div class="stage-card-head"><span>kite-diagram</span><span class="dots"><span></span><span></span><span></span></span></div>
+            <div style="padding: 8px">
+              <kite-diagram width="720" height="360">
+                canvas 720 360
+                orbit 0 0 118 16
+                circle -235 88 38 fill=#fde68a stroke=#d97706
+                text -235 88 "zero-build"
+                line -160 88 -60 16 arrow
+              </kite-diagram>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="shell">
+      <span>Kite · RFC-0001 implementation</span>
+      <span><a href="tests/acceptance.html">Acceptance suite</a> · <a href="https://github.com/penrose/penrose">Penrose lineage</a></span>
+    </footer>
+
+    <script type="module">
+      import { scene, $, ensure, ops } from './kite.js';
+
+      /* ------------------------------------------------------------------ */
+      /* Hero: orbit manifold                                                */
+      /* ------------------------------------------------------------------ */
+      const orbitStage = document.getElementById('orbit-stage');
+      const os = scene(orbitStage, { width: 620, height: 560, seed: 71 });
+      const orbit = os.circle({ center: [0, 0], r: 172, fill: 'none', stroke: '#cbd5e1', strokeWidth: 1.5 });
+      os.circle({ center: [0, 0], r: 5, fill: '#94a3b8', stroke: 'none' });
+      const planet = os.circle({ center: [172, 0], r: 22, fill: '#2f5de3', stroke: '#1e3a8a', strokeWidth: 2, drag: true });
+      os.line({ start: orbit.center, end: planet.center, stroke: '#dbe4ff', strokeWidth: 1 });
+      os.circle({ center: planet.center, r: 6, fill: '#bfdbfe', stroke: 'none' });
+      ensure`${ops.dist(planet.center, orbit.center)} == ${orbit.r}`;
+      const errorEl = document.getElementById('orbit-error');
+      const statusEl = document.getElementById('orbit-status');
+      const countEl = document.getElementById('orbit-count');
+      countEl.textContent = String(os.constraints.length);
+      setInterval(() => {
+        statusEl.textContent = os.converged ? 'sleep' : 'running';
+        errorEl.textContent = Number.isFinite(os.maxError) ? os.maxError.toFixed(3) : '—';
+      }, 400);
+
+      /* ------------------------------------------------------------------ */
+      /* Auto-slack                                                          */
+      /* ------------------------------------------------------------------ */
+      const slackStage = document.getElementById('slack-stage');
+      const ss = scene(slackStage, { width: 560, height: 330, seed: 72 });
+      const c1 = ss.circle({ center: [-70, 0], r: 34, fill: '#fb923c', stroke: '#c2410c', strokeWidth: 2, drag: true });
+      const c2 = ss.circle({
+        center: [$`${c1.center[0]} + 80`, c1.center[1]],
+        r: 34,
+        fill: '#34d399',
+        stroke: '#047857',
+        strokeWidth: 2,
+        drag: true,
+      });
+      ss.line({ start: c1.center, end: c2.center, stroke: '#94a3b8', strokeWidth: 1.5 });
+      ss.text({ center: [$`(${c1.center[0]} + ${c2.center[0]}) / 2`, $`${c1.center[1]} + 30`], string: '80px', fontSize: 13, fill: '#64748b', stroke: 'none' });
+
+      /* ------------------------------------------------------------------ */
+      /* Euler diagram                                                       */
+      /* ------------------------------------------------------------------ */
+      const eulerStage = document.getElementById('euler-stage');
+      const es = scene(eulerStage, { width: 560, height: 330, seed: 73 });
+      const SetT = es.type('Set');
+      const Subset = es.predicate('Subset', [SetT, SetT]);
+      const Disjoint = es.predicate('Disjoint', [SetT, SetT]);
+      const defs = [
+        { label: 'A', r: 138, x: 0, y: 0, ox: 0, oy: 110, fill: 'rgba(47,93,227,0.08)', stroke: '#2f5de3' },
+        { label: 'B', r: 50, x: -48, y: -12, ox: -2, oy: 32, fill: 'rgba(16,185,129,0.14)', stroke: '#059669' },
+        { label: 'C', r: 40, x: 48, y: 18, ox: 2, oy: 37, fill: 'rgba(245,158,11,0.16)', stroke: '#d97706' },
+        { label: 'D', r: 16, x: -58, y: 8, ox: -17, oy: -38, fill: 'rgba(139,92,246,0.18)', stroke: '#7c3aed' },
+        { label: 'E', r: 14, x: 58, y: 28, ox: 2, oy: -40, fill: 'rgba(236,72,153,0.16)', stroke: '#db2777' },
+      ];
+      const inst = {};
+      const state = {};
+      for (const d of defs) {
+        inst[d.label] = SetT({ label: d.label, ...d });
+        const pinned = d.label === 'A';
+        state[d.label] = {
+          x: es.input({ init: d.x, optimized: !pinned }),
+          y: es.input({ init: d.y, optimized: !pinned }),
+          r: es.input({ init: d.r, optimized: false }),
+        };
+      }
+      Subset(inst.B, inst.A);
+      Subset(inst.C, inst.A);
+      Disjoint(inst.B, inst.C);
+      Subset(inst.D, inst.B);
+      Subset(inst.E, inst.C);
+      es.forall({ st: SetT }, ({ st }) => {
+        const stt = state[st.label];
+        es.circle({
+          center: [stt.x, stt.y],
+          r: stt.r,
+          fill: st.fill,
+          stroke: st.stroke,
+          strokeWidth: 2,
+          drag: st.label !== 'A',
+        });
+        es.text({
+          center: [$`${stt.x} + ${st.ox}`, $`${stt.y} + ${st.oy}`],
+          string: st.label,
+          fontSize: 17,
+          fill: '#334155',
+          stroke: 'none',
+          layer: 2,
+        });
+      });
+      es.forallWhere({ a: SetT, b: SetT }, ({ a, b }) => Subset.test(a, b), ({ a, b }) => {
+        const inner = state[a.label];
+        const outer = state[b.label];
+        ensure(ops.contains({ center: [outer.x, outer.y], r: outer.r }, { center: [inner.x, inner.y], r: inner.r }, 5));
+      });
+      es.forallWhere({ a: SetT, b: SetT }, ({ a, b }) => Disjoint.test(a, b), ({ a, b }) => {
+        const ca = state[a.label];
+        const cb = state[b.label];
+        ensure(ops.disjoint({ center: [ca.x, ca.y], r: ca.r }, { center: [cb.x, cb.y], r: cb.r }, 6));
+      });
+      es.step();
+
+      /* ------------------------------------------------------------------ */
+      /* Incremental topology                                                */
+      /* ------------------------------------------------------------------ */
+      const dynStage = document.getElementById('dynamic-stage');
+      const ds = scene(dynStage, { width: 1120, height: 360, seed: 74 });
+      const Body = ds.type('Body');
+      const dyn = new Map();
+      function bodyState(b) {
+        let st = dyn.get(b.id);
+        if (!st) {
+          st = { x: ds.input({ init: b.pos[0] }), y: ds.input({ init: b.pos[1] }), shapeId: null };
+          dyn.set(b.id, st);
+        }
+        return st;
+      }
+      const seeds = [
+        [-330, -40],
+        [-80, 60],
+        [180, -50],
+      ];
+      for (const p of seeds) Body({ pos: p });
+      ds.forall({ b: Body }, ({ b }) => {
+        const st = bodyState(b);
+        const c = ds.circle({
+          center: [st.x, st.y],
+          r: 34,
+          fill: '#2f5de3',
+          stroke: '#1e3a8a',
+          strokeWidth: 2,
+          drag: true,
+        });
+        st.shapeId = c.shapeId;
+        ds.text({ center: [st.x, st.y], string: '●', fontSize: 12, fill: '#bfdbfe', stroke: 'none', layer: 2 });
+      });
+      ds.forallWhere({ a: Body, b: Body }, ({ a, b }) => a.id < b.id, ({ a, b }) => {
+        const sa = bodyState(a);
+        const sb = bodyState(b);
+        ensure(ops.disjoint({ center: [sa.x, sa.y], r: 34 }, { center: [sb.x, sb.y], r: 34 }, 14));
+      });
+      ds.step();
+      let nextPlanet = 0;
+      const planetCountEl = document.getElementById('planet-count');
+      function refreshPlanetCount() {
+        const n = dyn.size;
+        const pairs = (n * (n - 1)) / 2;
+        planetCountEl.textContent = `${n} bodies · ${pairs} pair constraints`;
+      }
+      refreshPlanetCount();
+      document.getElementById('add-planet').addEventListener('click', () => {
+        const spots = [
+          [400, 90],
+          [-400, 90],
+          [320, -110],
+          [-280, -120],
+          [40, 120],
+          [0, -140],
+        ];
+        const p = spots[nextPlanet++ % spots.length];
+        Body({ pos: p });
+        ds.step();
+        refreshPlanetCount();
+      });
+
+      window.__kiteDemo = { os, ss, es, ds };
+    </script>
+  </body>
+</html>

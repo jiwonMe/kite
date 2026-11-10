@@ -1,0 +1,25 @@
+{
+  "name": "kite",
+  "version": "1.0.0",
+  "description": "RFC-0001: Zero-build declarative and manifold-projected diagram engine",
+  "type": "module",
+  "main": "kite.js",
+  "types": "kite.d.ts",
+  "exports": {
+    ".": {
+      "types": "./kite.d.ts",
+      "default": "./kite.js"
+    }
+  },
+  "files": [
+    "kite.js",
+    "kite.min.js",
+    "kite.d.ts"
+  ],
+  "scripts": {
+    "test": "node tests/unit-node.mjs && node tests/run.mjs",
+    "test:unit": "node tests/unit-node.mjs",
+    "test:browser": "node tests/run.mjs",
+    "serve": "node scripts/serve.mjs"
+  }
+}

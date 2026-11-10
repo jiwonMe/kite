@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kite — RFC-0001 Acceptance Tests</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #0f172a;
+        --muted: #64748b;
+        --line: #dbe3ef;
+        --card: #ffffff;
+        --bg: #f4f7fc;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 32px;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      h1 { font-size: 26px; letter-spacing: -0.03em; margin: 0 0 8px; }
+      .lede { color: var(--muted); margin: 0 0 24px; max-width: 78ch; line-height: 1.55; }
+      .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; align-items: start; }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 16px;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
+      }
+      .card h2 { font-size: 15px; margin: 0 0 4px; letter-spacing: -0.01em; }
+      .card p { margin: 0 0 12px; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+      .stage { border-radius: 12px; overflow: hidden; background: #fbfdff; border: 1px solid #e8eef7; }
+      .wide { grid-column: span 2; }
+      #t3 { width: 1000px; height: 800px; max-width: 100%; }
+      #t4 { width: 1000px; height: 700px; max-width: 100%; }
+      #t1, #t2 { width: 600px; height: 600px; max-width: 100%; }
+      .pill { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #eef2ff; color: #4338ca; margin-left: 6px; }
+    </style>
+  </head>
+  <body>
+    <h1>Kite — RFC-0001 Acceptance Suite</h1>
+    <p class="lede">
+      네 가지 인수 시나리오를 실제 SVG DOM과 포인터 드래그로 검증합니다. 결과는
+      <code>window.__KITE_RESULTS__</code>에 기록됩니다.
+    </p>
+
+    <div class="grid">
+      <section class="card">
+        <h2>Test 1 · Manifold Projection <span class="pill">orbit</span></h2>
+        <p>고정 원 위의 행성을 원 밖/중심으로 드래그해도 반경 150을 유지해야 합니다.</p>
+        <div class="stage" id="t1"></div>
+      </section>
+
+      <section class="card">
+        <h2>Test 2 · Auto-Slacking <span class="pill">derived drag</span></h2>
+        <p>c2.center = [c1.x + 80, c1.y]. 어느 쪽을 잡아도 80px 간격이 유지되어야 합니다.</p>
+        <div class="stage" id="t2"></div>
+      </section>
+
+      <section class="card wide">
+        <h2>Test 3 · Subtyping &amp; Euler Diagram <span class="pill">domain / style</span></h2>
+        <p>다중 상속(NamedSet ⊂ Set, Named)과 contains / disjoint 제약. 0.5초 내 수렴 후 외곽 집합을 드래그합니다.</p>
+        <div class="stage" id="t3"></div>
+      </section>
+
+      <section class="card wide">
+        <h2>Test 4 · Incremental Topology <span class="pill">append-only tape</span></h2>
+        <p>실행 중 새 행성을 추가하면 기존 위치를 유지한 채 새 변수/제약만 테이프에 덧붙습니다.</p>
+        <div class="stage" id="t4"></div>
+      </section>
+    </div>
+
+    <script type="module">
+      import { scene, $, ensure, ops } from '../kite.js';
+
+      const K = (window.__KITE = {});
+      const results = (window.__KITE_RESULTS__ = {
+        done: false,
+        tests: {},
+        errors: [],
+      });
+
+      function waitConverged(s, threshold = 1e-2, timeout = 4000) {
+        return new Promise((resolve, reject) => {
+          const t0 = performance.now();
+          const tick = () => {
+            if (s.maxError <= threshold && s.converged) return resolve(performance.now() - t0);
+            if (performance.now() - t0 > timeout) {
+              return reject(new Error(`convergence timeout maxError=${s.maxError}`));
+            }
+            requestAnimationFrame(tick);
+          };
+          tick();
+        });
+      }
+
+      async function mountAndSettle(s, threshold = 1e-2) {
+        const t0 = performance.now();
+        await s.mount();
+        const waited = await waitConverged(s, threshold);
+        return performance.now() - t0;
+      }
+
+      function shapeCircle(s, shapeId) {
+        const g = s._svg.querySelector('[data-kite-shape="' + shapeId + '"]');
+        const c = g.querySelector('circle');
+        return {
+          cx: Number(c.getAttribute('cx')),
+          cy: -Number(c.getAttribute('cy')),
+          r: Number(c.getAttribute('r')),
+        };
+      }
+
+      function stageId(id) {
+        return document.getElementById(id);
+      }
+
+      /* ------------------------------------------------------------------ */
+      /* Test 1 — orbit manifold                                              */
+      /* ------------------------------------------------------------------ */
+
+      async function test1() {
+        const s = scene(stageId('t1'), { width: 600, height: 600, seed: 101 });
+        const Orbit = s.type('Orbit');
+        const Planet = s.type('Planet');
+        Orbit({});
+        Planet({});
+        let orbitId = null;
+        let planetId = null;
+        s.forall({ o: Orbit }, () => {
+          const o = s.circle({ center: [0, 0], r: 150, fill: 'none', stroke: '#94a3b8', strokeWidth: 2 });
+          orbitId = o.shapeId;
+        });
+        s.forall({ p: Planet }, () => {
+          const p = s.circle({ center: [150, 0], r: 18, fill: '#2563eb', stroke: '#1e3a8a', strokeWidth: 2, drag: true });
+          planetId = p.shapeId;
+          ensure`${ops.dist(p.center, [0, 0])} == ${150}`;
+        });
+        s.step();
+        const initial = await mountAndSettle(s, 1e-3);
+        K.t1 = { s, orbitId, planetId };
+        return {
+          initial,
+          maxError: s.maxError,
+          orbit: shapeCircle(s, orbitId),
+          planet: shapeCircle(s, planetId),
+        };
+      }
+
+      /* ------------------------------------------------------------------ */
+      /* Test 2 — auto-slacking                                               */
+      /* ------------------------------------------------------------------ */
+
+      async function test2() {
+        const s = scene(stageId('t2'), { width: 600, height: 600, seed: 202 });
+        const c1 = s.circle({ center: [0, 0], r: 30, fill: '#f97316', stroke: '#9a3412', drag: true });
+        const c2 = s.circle({
+          center: [$`${c1.center[0]} + 80`, c1.center[1]],
+          r: 30,
+          fill: '#22c55e',
+          stroke: '#166534',
+          drag: true,
+        });
+        const initial = await mountAndSettle(s, 1e-3);
+        K.t2 = { s, c1Id: c1.shapeId, c2Id: c2.shapeId };
+        return {
+          initial,
+          maxError: s.maxError,
+          c1: shapeCircle(s, c1.shapeId),
+          c2: shapeCircle(s, c2.shapeId),
+          autoSlackConstraints: s.constraints.length,
+        };
+      }
+
+      /* ------------------------------------------------------------------ */
+      /* Test 3 — subtyping + Euler diagram                                   */
+      /* ------------------------------------------------------------------ */
+
+      async function test3() {
+        const s = scene(stageId('t3'), { width: 1000, height: 800, seed: 303 });
+        const Element = s.type('Element');
+        const Named = s.type('Named');
+        const SetT = s.type('Set', Element);
+        const NamedSet = s.type('NamedSet', SetT, Named);
+        const Subset = s.predicate('Subset', [SetT, SetT]);
+        const Disjoint = s.predicate('Disjoint', [SetT, SetT]);
+
+        const defs = [
+          { key: 'A', type: NamedSet, label: 'A', r: 330, x: 0, y: 0, fill: 'rgba(59,130,246,0.10)', stroke: '#2563eb' },
+          { key: 'B', type: SetT, label: 'B', r: 105, x: -90, y: 0, fill: 'rgba(16,185,129,0.16)', stroke: '#059669' },
+          { key: 'C', type: SetT, label: 'C', r: 85, x: 120, y: 0, fill: 'rgba(245,158,11,0.16)', stroke: '#d97706' },
+          { key: 'D', type: SetT, label: 'D', r: 55, x: -110, y: 0, fill: 'rgba(139,92,246,0.18)', stroke: '#7c3aed' },
+          { key: 'E', type: SetT, label: 'E', r: 45, x: 150, y: -10, fill: 'rgba(236,72,153,0.16)', stroke: '#db2777' },
+        ];
+        const sets = {};
+        const states = {};
+        const labelOffsets = {
+          A: [0, 300],
+          B: [0, 76],
+          C: [0, 66],
+          D: [0, -50],
+          E: [0, -50],
+        };
+        for (const d of defs) {
+          const inst = d.type({ label: d.label, r: d.r });
+          sets[d.key] = inst;
+          const cx = s.input({ init: d.x });
+          const cy = s.input({ init: d.y });
+          states[d.key] = {
+            inst,
+            cx,
+            cy,
+            r: s.input({ init: d.r, optimized: false }),
+            shapeId: null,
+            labelId: null,
+          };
+        }
+
+        Subset(sets.B, sets.A);
+        Subset(sets.C, sets.A);
+        Disjoint(sets.B, sets.C);
+        Subset(sets.D, sets.B);
+        Subset(sets.E, sets.C);
+
+        let typeMatches = 0;
+        let elementMatches = 0;
+        let namedSetMatches = 0;
+
+        s.forall({ st: SetT }, ({ st }) => {
+          typeMatches++;
+          const state = states[st.label];
+          const circle = s.circle({
+            center: [state.cx, state.cy],
+            r: state.r,
+            fill: st.label === 'A' ? 'rgba(59,130,246,0.10)' : 'rgba(100,116,139,0.12)',
+            stroke: st.label === 'A' ? '#2563eb' : '#475569',
+            strokeWidth: 2,
+            drag: true,
+            layer: 0,
+          });
+          state.shapeId = circle.shapeId;
+          const [lox, loy] = labelOffsets[st.label];
+          const label = s.text({
+            center: [$`${state.cx} + ${lox}`, $`${state.cy} + ${loy}`],
+            string: st.label,
+            fontSize: 24,
+            fill: '#0f172a',
+            stroke: 'none',
+            layer: 2,
+          });
+          state.labelId = label.shapeId;
+        });
+        s.forall({ e: Element }, () => {
+          elementMatches++;
+        });
+        s.forall({ n: NamedSet }, () => {
+          namedSetMatches++;
+        });
+
+        s.forallWhere({ a: SetT, b: SetT }, ({ a, b }) => Subset.test(a, b) && a.id !== b.id, ({ a, b }) => {
+          // Subset(a, b) means a is the inner set and b is the outer set.
+          const inner = states[a.label];
+          const outer = states[b.label];
+          ensure(ops.contains({ center: [outer.cx, outer.cy], r: outer.r }, { center: [inner.cx, inner.cy], r: inner.r }, 8));
+        });
+        s.forallWhere({ a: SetT, b: SetT }, ({ a, b }) => Disjoint.test(a, b) && a.id !== b.id, ({ a, b }) => {
+          const ca = states[a.label];
+          const cb = states[b.label];
+          ensure(ops.disjoint({ center: [ca.cx, ca.cy], r: ca.r }, { center: [cb.cx, cb.cy], r: cb.r }, 10));
+        });
+
+        s.step();
+        K.t3 = { s, states };
+        const elapsed = await mountAndSettle(s, 1e-2);
+        return {
+          elapsed,
+          maxError: s.maxError,
+          constraints: s.constraints.length,
+          typeMatches,
+          elementMatches,
+          namedSetMatches,
+          positions: Object.fromEntries(
+            Object.entries(states).map(([k, st]) => [k, { ...shapeCircle(s, st.shapeId), r: s._val(st.r) }]),
+          ),
+        };
+      }
+
+      /* ------------------------------------------------------------------ */
+      /* Test 4 — incremental topology                                        */
+      /* ------------------------------------------------------------------ */
+
+      async function test4() {
+        const s = scene(stageId('t4'), { width: 1000, height: 700, seed: 404 });
+        const Body = s.type('Body');
+        const positions = [
+          [-220, -40],
+          [-40, 80],
+          [180, -60],
+        ];
+        const bodies = positions.map((p) => Body({ pos: p }));
+        const states = new Map();
+        for (const b of bodies) {
+          states.set(b.id, { inst: b, shapeId: null, x: s.input({ init: b.pos[0] }), y: s.input({ init: b.pos[1] }) });
+        }
+
+        s.forall({ b: Body }, ({ b }) => {
+          let st = states.get(b.id);
+          if (!st) {
+            st = { inst: b, shapeId: null, x: s.input({ init: b.pos[0] }), y: s.input({ init: b.pos[1] }) };
+            states.set(b.id, st);
+          }
+          const circle = s.circle({
+            center: [st.x, st.y],
+            r: 34,
+            fill: '#3b82f6',
+            stroke: '#1e3a8a',
+            strokeWidth: 2,
+            drag: true,
+          });
+          st.shapeId = circle.shapeId;
+        });
+        s.forallWhere({ a: Body, b: Body }, ({ a, b }) => a.id < b.id, ({ a, b }) => {
+          const sa = states.get(a.id);
+          const sb = states.get(b.id);
+          ensure(ops.disjoint({ center: [sa.x, sa.y], r: 34 }, { center: [sb.x, sb.y], r: 34 }, 12));
+        });
+
+        s.step();
+        const initial = await mountAndSettle(s, 1e-2);
+        const before = Object.fromEntries(
+          [...states.entries()].map(([id, st]) => [id, shapeCircle(s, st.shapeId)]),
+        );
+        K.t4 = { s, Body, states, before };
+        return {
+          initial,
+          maxError: s.maxError,
+          bodyCount: states.size,
+          before,
+        };
+      }
+
+      /* ------------------------------------------------------------------ */
+      /* Helpers used by the Playwright driver                               */
+      /* ------------------------------------------------------------------ */
+
+      K.worldToClient = (sceneName, x, y) => {
+        const s = K[sceneName].s;
+        const svg = s._svg;
+        const pt = svg.createSVGPoint();
+        pt.x = x;
+        pt.y = -y;
+        const out = pt.matrixTransform(svg.getScreenCTM());
+        return { x: out.x, y: out.y };
+      };
+
+      K.scrollTo = (sceneName) => {
+        K[sceneName].s._svg.scrollIntoView({ block: 'center', inline: 'center' });
+      };
+
+      K.addDynamicBody = (x, y) => {
+        const { s, Body, states } = K.t4;
+        const inst = Body({ pos: [x, y] });
+        const st = { inst, shapeId: null, x: s.input({ init: x }), y: s.input({ init: y }) };
+        states.set(inst.id, st);
+        s.step();
+        return inst.id;
+      };
+
+      K.readCircle = (sceneName, shapeId) => shapeCircle(K[sceneName].s, shapeId);
+
+      K.snapshot = () => {
+        const t1 = K.t1;
+        const t2 = K.t2;
+        const t3 = K.t3;
+        const t4 = K.t4;
+        return {
+          t1: { planet: shapeCircle(t1.s, t1.planetId), maxError: t1.s.maxError, converged: t1.s.converged },
+          t2: {
+            c1: shapeCircle(t2.s, t2.c1Id),
+            c2: shapeCircle(t2.s, t2.c2Id),
+            maxError: t2.s.maxError,
+            converged: t2.s.converged,
+          },
+          t3: {
+            positions: Object.fromEntries(
+              Object.entries(t3.states).map(([k, st]) => [k, shapeCircle(t3.s, st.shapeId)]),
+            ),
+            maxError: t3.s.maxError,
+            converged: t3.s.converged,
+          },
+          t4: {
+            bodies: [...t4.states.entries()].map(([id, st]) => ({ id, ...shapeCircle(t4.s, st.shapeId) })),
+            maxError: t4.s.maxError,
+            converged: t4.s.converged,
+          },
+        };
+      };
+
+      K.wakeAll = () => {
+        for (const name of ['t1', 't2', 't3', 't4']) if (K[name]) K[name].s._wake();
+      };
+
+      /* ------------------------------------------------------------------ */
+      /* Boot                                                                */
+      /* ------------------------------------------------------------------ */
+
+      K.ready = (async () => {
+        try {
+          const r1 = await test1();
+          const r2 = await test2();
+          const r3 = await test3();
+          const r4 = await test4();
+          Object.assign(results.tests, { t1: r1, t2: r2, t3: r3, t4: r4 });
+        } catch (err) {
+          results.errors.push(String(err && err.stack ? err.stack : err));
+        } finally {
+          results.done = true;
+        }
+        return results;
+      })();
+    </script>
+  </body>
+</html>

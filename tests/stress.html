@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <title>Kite — spatial hash stress</title>
+    <style>
+      body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; background: #f4f7fc; }
+      #stage { width: 820px; height: 820px; background: #fff; border: 1px solid #dbe3ef; border-radius: 16px; }
+    </style>
+  </head>
+  <body>
+    <div id="stage"></div>
+    <script type="module">
+      import { scene, ensure, ops } from '../kite.js';
+
+      const s = scene(document.getElementById('stage'), { width: 820, height: 820, seed: 909 });
+      const BodyT = s.type('Body');
+      const bodies = [];
+      const state = new Map();
+      const NX = 6;
+      const NY = 6;
+      const SPACING = 112;
+      for (let iy = 0; iy < NY; iy++) {
+        for (let ix = 0; ix < NX; ix++) {
+          const x = (ix - (NX - 1) / 2) * SPACING;
+          const y = (iy - (NY - 1) / 2) * SPACING;
+          const b = BodyT({ pos: [x, y] });
+          bodies.push(b);
+          state.set(b.id, { b, x: s.input({ init: x }), y: s.input({ init: y }), shapeId: null });
+        }
+      }
+      s.forall({ b: BodyT }, ({ b }) => {
+        const st = state.get(b.id);
+        const c = s.circle({
+          center: [st.x, st.y],
+          r: 22,
+          fill: '#2f5de3',
+          stroke: '#1e3a8a',
+          strokeWidth: 1.5,
+          drag: true,
+        });
+        st.shapeId = c.shapeId;
+      });
+      let pairCount = 0;
+      s.forallWhere({ a: BodyT, b: BodyT }, ({ a, b }) => a.id < b.id, ({ a, b }) => {
+        pairCount++;
+        const sa = state.get(a.id);
+        const sb = state.get(b.id);
+        ensure(ops.disjoint({ center: [sa.x, sa.y], r: 22 }, { center: [sb.x, sb.y], r: 22 }, 8));
+      });
+      s.step();
+
+      const wait = (threshold = 1e-2, timeout = 8000) =>
+        new Promise((resolve, reject) => {
+          const t0 = performance.now();
+          const tick = () => {
+            if (s.converged && s.maxError <= threshold) return resolve(performance.now() - t0);
+            if (performance.now() - t0 > timeout) return reject(new Error('stress timeout ' + s.maxError));
+            requestAnimationFrame(tick);
+          };
+          tick();
+        });
+
+      const K = (window.__KITE_STRESS = { s, state, pairCount });
+      K.ready = (async () => {
+        const t0 = performance.now();
+        await s.mount();
+        const elapsed = await wait();
+        return {
+          elapsed,
+          pairCount,
+          maxError: s.maxError,
+          constraints: s.constraints.length,
+          bodies: [...state.values()].map((st) => ({ x: s._val(st.x), y: s._val(st.y), shapeId: st.shapeId })),
+        };
+      })();
+
+      K.worldToClient = (x, y) => {
+        const svg = s._svg;
+        const p = svg.createSVGPoint();
+        p.x = x;
+        p.y = -y;
+        const out = p.matrixTransform(svg.getScreenCTM());
+        return { x: out.x, y: out.y };
+      };
+      K.scroll = () => s._svg.scrollIntoView({ block: 'center' });
+      K.snapshot = () => ({
+        maxError: s.maxError,
+        converged: s.converged,
+        bodies: [...state.values()].map((st) => ({ x: s._val(st.x), y: s._val(st.y), shapeId: st.shapeId })),
+      });
+    </script>
+  </body>
+</html>
