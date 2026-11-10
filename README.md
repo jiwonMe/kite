@@ -106,7 +106,7 @@ export PLAYWRIGHT_CORE="/path/to/playwright-core/index.mjs"
 5. **Spatial hash stress (보조)** — 36개 원, 630개 `disjoint` 쌍.
    32쌍 초과 시 균일 격자 광역 단계가 활성 쌍만 XPBD에 투입하는지 검증.
 
-현재 결과: **단위 테스트 11개 + 브라우저 인수 검증 43개 통과.**
+현재 결과: **단위 테스트 11개 + 브라우저 인수 검증 47개 통과.**
 
 ---
 
@@ -169,6 +169,19 @@ const c2 = s.circle({
 `c2.center[0]`은 `ADD` 노드이므로 엔진이 자유 변수 `u`를 만들고
 `u - (c1.x + 80) == 0` 하드 제약을 자동 등록합니다. `c2.center[1]`은 이미 자유 변수이므로
 그대로 재사용됩니다.
+
+### 갤러리
+
+`index.html`의 Examples 섹션은 `examples/` 모듈 여섯 개입니다. 각 파일은 장면을 만들어 반환하는 전체 스크립트입니다.
+
+| 모듈 | 선언 |
+| --- | --- |
+| `examples/sine.js` | `y == 52 * sin(x / 34)`, 그리고 보이는 구간의 `x` 부등식 |
+| `examples/box.js` | 사각형 벽 네 변을 `x`, `y` 하드 부등식으로 |
+| `examples/linkage.js` | 고정 힌지 + 막대 길이 등식 3개 |
+| `examples/square.js` | `dot(u, v) == 0`과 두 변의 길이 110 |
+| `examples/lens.js` | `overlapping` 36px, 교집합 안의 `contains` |
+| `examples/bead.js` | 이름 있는 입력 `len`. `setInput`으로 줄이면 구슬이 선분 안으로 밀림 |
 
 ### `ops` 헬퍼의 부등식 방향
 
@@ -260,6 +273,17 @@ kite.js
 
 ---
 
+## Structural formula example
+
+[`examples/caffeine.html`](./examples/caffeine.html)는 Penrose의 structural-formula 예제를
+Kite API로 옮긴 것입니다. `Node <: Atom <: Carbon/Nitrogen/Oxygen/Hydrogen` 계층,
+`SingleBond` / `DoubleBond` / `IonicBond` / `Contains` 술어, 24개 원자와 25개 결합,
+세 개의 메틸기 `FunctionalGroup` 박스를 포함합니다.
+
+현재 Kite의 도형 집합은 Circle / Line / Rect / Text이므로 Penrose의 `Image`, `Ellipse`,
+`Equation`, `Group` + CSS filter, 스타일 `override`, 상대 레이어(`above`/`below`),
+Trio 텍스트 파서는 지원하지 않습니다. 의미 구조와 기하는 JS API로 직접 선언할 수 있습니다.
+
 ## Penrose 레퍼런스
 
 - Trio 구조와 `forall ... where` 스타일 매칭: Penrose의 set-theory 예제
@@ -276,6 +300,7 @@ kite.js                  엔진 본체 (단일 ES 모듈)
 kite.min.js              esbuild로 minify한 배포용 단일 파일
 kite.d.ts                TypeScript 선언
 index.html               인터랙티브 데모
+examples/*.js            추가 예시 6개 (사인, 상자, 링크, 직각, 렌즈, 구슬)
 tests/unit-node.mjs      DOM 없는 단위 테스트
 tests/acceptance.html    RFC 4개 인수 시나리오
 tests/run.mjs            Playwright 드라이버

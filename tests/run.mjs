@@ -264,7 +264,7 @@ try {
     customSvg: document.querySelectorAll('kite-diagram svg').length,
     customCircles: document.querySelectorAll('kite-diagram svg circle').length,
   }));
-  check('demo scenes boot', demo.scenes === 4, JSON.stringify(demo));
+  check('demo scenes boot', demo.scenes === 10, JSON.stringify(demo));
   check('custom element renders', demo.customSvg === 1 && demo.customCircles >= 2, JSON.stringify(demo));
   check('demo has no page errors', pageErrors.length === 0, pageErrors.join(' | '));
 
@@ -313,6 +313,32 @@ try {
     Math.hypot(cd.x, cd.y) > 20 && Math.hypot(cd.x - ld.x, cd.y - ld.y) < 0.05,
     JSON.stringify({ cd, ld }),
   );
+
+  console.log('\nStructural formula — caffeine');
+  pageErrors.length = 0;
+  await page.goto(`http://127.0.0.1:${port}/examples/caffeine.html`, { waitUntil: 'load' });
+  await page.waitForTimeout(1200);
+  const caffeine = await page.evaluate(() => {
+    const k = window.__KITE_CAFFEINE;
+    if (!k) return null;
+    const texts = [...document.querySelectorAll('#mol-stage svg text')].map((t) => t.textContent);
+    return {
+      atoms: k.atoms,
+      bonds: k.bonds,
+      groups: k.groups,
+      title: k.title,
+      shapes: k.s.shapes.length,
+      circles: document.querySelectorAll('#mol-stage svg circle').length,
+      lines: document.querySelectorAll('#mol-stage svg line').length,
+      hasTitle: texts.includes('caffeine'),
+      hasOxygen: texts.includes('O'),
+      hasNitrogen: texts.includes('N'),
+    };
+  });
+  check('caffeine: 24 atoms / 25 bonds / 3 groups', !!caffeine && caffeine.atoms === 24 && caffeine.bonds === 25 && caffeine.groups === 3, JSON.stringify(caffeine));
+  check('caffeine: SVG graph rendered', !!caffeine && caffeine.circles >= 40 && caffeine.lines >= 50, JSON.stringify(caffeine));
+  check('caffeine: labels and title', !!caffeine && caffeine.hasTitle && caffeine.hasOxygen && caffeine.hasNitrogen, JSON.stringify(caffeine));
+  check('caffeine: no page errors', pageErrors.length === 0, pageErrors.join(' | '));
 
   console.log(`\n${passes.length} passed, ${failures.length} failed`);
   if (failures.length) {

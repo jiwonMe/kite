@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kite — Structural formula (caffeine)</title>
+    <style>
+      :root {
+        --ink: #111827;
+        --muted: #667085;
+        --faint: #98a2b3;
+        --line: #e4e7ec;
+        --paper: #f6f8fb;
+        --card: #ffffff;
+        --accent: #2f5de3;
+        --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        --sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+      }
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        color: var(--ink);
+        background:
+          radial-gradient(1000px 520px at 18% -10%, #eef2ff 0%, transparent 65%),
+          var(--paper);
+        font-family: var(--sans);
+        -webkit-font-smoothing: antialiased;
+      }
+      a { color: inherit; }
+      .shell { max-width: 1320px; margin: 0 auto; padding: 0 32px; }
+      header { padding: 26px 0 10px; }
+      .nav { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+      .brand { display: flex; align-items: center; gap: 10px; font-weight: 650; letter-spacing: -0.02em; text-decoration: none; }
+      .mark {
+        width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center;
+        background: var(--ink); color: #fff; font-size: 15px; transform: rotate(-4deg);
+        box-shadow: 0 6px 18px rgba(17, 24, 39, 0.18);
+      }
+      .nav-links { display: flex; gap: 22px; font-size: 13px; color: var(--muted); }
+      .nav-links a { text-decoration: none; }
+      .nav-links a:hover { color: var(--ink); }
+
+      .hero { padding: 52px 0 26px; display: grid; grid-template-columns: 1.35fr 0.65fr; gap: 36px; align-items: start; }
+      .eyebrow {
+        display: inline-flex; align-items: center; gap: 8px; font-family: var(--mono);
+        font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent);
+        background: #eef2ff; border: 1px solid #dbe4ff; padding: 6px 10px; border-radius: 999px;
+      }
+      .eyebrow::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px #dbe4ff; }
+      h1 {
+        margin: 20px 0 12px; font-family: var(--serif); font-size: clamp(42px, 5vw, 68px);
+        line-height: 1; letter-spacing: -0.05em; font-weight: 500;
+      }
+      h1 em { font-style: italic; color: var(--accent); }
+      .lede { margin: 0; max-width: 62ch; color: var(--muted); font-size: 14.5px; line-height: 1.7; }
+      .lede code { font-family: var(--mono); font-size: 0.88em; background: #eef1f6; padding: 2px 5px; border-radius: 5px; color: #344054; }
+      .stage-card {
+        background: var(--card); border: 1px solid var(--line); border-radius: 22px;
+        box-shadow: 0 28px 80px rgba(16, 24, 40, 0.09), 0 2px 0 rgba(16, 24, 40, 0.03);
+        overflow: hidden; margin-top: 26px;
+      }
+      .stage-head {
+        display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        padding: 12px 16px; border-bottom: 1px solid #edf0f4; font-family: var(--mono);
+        font-size: 10.5px; color: var(--faint); letter-spacing: 0.03em;
+      }
+      .dots { display: flex; gap: 5px; }
+      .dots span { width: 7px; height: 7px; border-radius: 50%; background: #e4e7ec; }
+      .dots span:first-child { background: #fca5a5; }
+      .dots span:nth-child(2) { background: #fcd34d; }
+      .dots span:nth-child(3) { background: #86efac; }
+      #mol-stage { background: #fbfcfe; }
+      #mol-stage svg { display: block; width: 100%; height: auto; }
+      #mol-stage svg text { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
+      .caption { padding: 12px 16px; border-top: 1px solid #edf0f4; color: var(--faint); font-size: 11px; display: flex; justify-content: space-between; gap: 12px; }
+      .caption b { font-weight: 600; color: var(--muted); }
+      .side { display: grid; gap: 14px; position: sticky; top: 24px; }
+      .panel { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 18px; }
+      .panel h2 { margin: 0 0 10px; font-size: 13px; letter-spacing: -0.01em; }
+      .panel p { margin: 0 0 10px; color: var(--muted); font-size: 12.5px; line-height: 1.65; }
+      .map { display: grid; gap: 8px; font-size: 12px; }
+      .map div { display: grid; grid-template-columns: 92px 1fr; gap: 8px; padding-bottom: 8px; border-bottom: 1px solid #f1f3f7; }
+      .map div:last-child { border-bottom: 0; padding-bottom: 0; }
+      .map code { font-family: var(--mono); font-size: 10.5px; color: var(--accent); }
+      .map span { color: #475467; line-height: 1.5; }
+      .code-card { background: #0f172a; border-radius: 16px; overflow: hidden; color: #dbe4f3; }
+      .code-head { padding: 11px 15px; border-bottom: 1px solid rgba(255,255,255,0.08); font-family: var(--mono); font-size: 10px; color: #94a3b8; }
+      pre { margin: 0; padding: 15px; overflow: auto; font-family: var(--mono); font-size: 10.5px; line-height: 1.75; }
+      .k { color: #93c5fd; } .s { color: #86efac; } .n { color: #fca5a5; } .c { color: #64748b; }
+      .limits { margin: 0; padding-left: 17px; color: var(--muted); font-size: 12px; line-height: 1.7; }
+      .limits li { margin-bottom: 5px; }
+      .note { font-size: 11px; color: var(--faint); line-height: 1.6; }
+      .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+      .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 9px; font-size: 12px; font-weight: 600; text-decoration: none; border: 1px solid transparent; }
+      .btn-primary { background: var(--ink); color: #fff; }
+      .btn-ghost { background: #fff; border-color: var(--line); color: #344054; }
+      footer { margin-top: 64px; border-top: 1px solid var(--line); padding: 24px 0 42px; color: var(--faint); font-size: 11.5px; display: flex; justify-content: space-between; gap: 24px; }
+      footer a { color: #475467; text-decoration: none; }
+      @media (max-width: 980px) {
+        .hero { grid-template-columns: 1fr; }
+        .side { position: static; grid-template-columns: 1fr 1fr; }
+      }
+      @media (max-width: 620px) {
+        .shell { padding: 0 18px; }
+        .side { grid-template-columns: 1fr; }
+        .nav-links { display: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="shell">
+      <nav class="nav">
+        <a class="brand" href="../index.html"><span class="mark">◇</span> Kite</a>
+        <div class="nav-links">
+          <a href="../index.html">Playground</a>
+          <a href="../tests/acceptance.html">Acceptance tests</a>
+          <a href="https://github.com/penrose/penrose">Penrose</a>
+        </div>
+      </nav>
+    </header>
+
+    <main class="shell">
+      <section class="hero">
+        <div>
+          <span class="eyebrow">structural formula · caffeine</span>
+          <h1>The same molecule, <em>declared</em>.</h1>
+          <p class="lede">
+            Penrose의 structural-formula 예제와 같은 도메인·서브스턴스·스타일 구조를 Kite로 옮긴 예제입니다.
+            <code>Node &lt;: Atom &lt;: Carbon</code> 같은 다중 상속, <code>SingleBond</code>/<code>DoubleBond</code>
+            술어, <code>forall / where</code> 규칙, 레이어와 라벨이 모두 같은 장면 안에서 동작합니다.
+          </p>
+          <div class="actions">
+            <a class="btn btn-primary" href="../tests/acceptance.html">인수 테스트 보기 →</a>
+            <a class="btn btn-ghost" href="../index.html">다른 데모</a>
+          </div>
+        </div>
+        <div class="side">
+          <div class="panel">
+            <h2>Penrose → Kite</h2>
+            <div class="map">
+              <div><code>type</code><span>비트마스크 다중 상속</span></div>
+              <div><code>predicate</code><span>Substance 관계 + <code>.test()</code></span></div>
+              <div><code>forall where</code><span>주입적 패턴 매칭</span></div>
+              <div><code>ensure</code><span>하드 제약 / XPBD</span></div>
+              <div><code>layer</code><span>숫자 레이어로 페인트 순서 제어</span></div>
+            </div>
+          </div>
+          <div class="panel">
+            <h2>이 예제에서 쓰는 것</h2>
+            <p>
+              원자 24개, 결합 25개. 탄소는 무라벨 골격, N/O/H는 원소 기호, 세 개의 메틸기는
+              옅은 <code>FunctionalGroup</code> 박스로 표시했습니다.
+            </p>
+            <p class="note">
+              좌표는 재현 가능한 2D 배치로 고정했습니다. Kite는 이 좌표를 자유 변수로 두고
+              결합 길이·반발 제약을 <code>ensure</code>/<code>encourage</code>로 풀 수도 있습니다.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="stage-card">
+        <div class="stage-head">
+          <span>caffeine.kite — C₈H₁₀N₄O₂</span>
+          <span class="dots"><span></span><span></span><span></span></span>
+        </div>
+        <div id="mol-stage"></div>
+        <div class="caption">
+          <span><b>SingleBond</b> double-stroke · <b>DoubleBond</b> parallel pair</span>
+          <span>24 atoms · 25 bonds · faint boxes = CH₃ groups</span>
+        </div>
+      </section>
+
+      <section class="stage-card" style="margin-top: 22px">
+        <div class="code-head">the declaration</div>
+<pre><span class="c">// types &amp; predicates</span>
+<span class="k">const</span> Node = s.type(<span class="s">"Node"</span>);
+<span class="k">const</span> Atom = s.type(<span class="s">"Atom"</span>, Node);
+<span class="k">const</span> Carbon = s.type(<span class="s">"Carbon"</span>, Atom);
+<span class="k">const</span> Nitrogen = s.type(<span class="s">"Nitrogen"</span>, Atom);
+<span class="k">const</span> Hydrogen = s.type(<span class="s">"Hydrogen"</span>, Atom);
+<span class="k">const</span> SingleBond = s.predicate(<span class="s">"SingleBond"</span>, [Node, Node]);
+<span class="k">const</span> DoubleBond = s.predicate(<span class="s">"DoubleBond"</span>, [Node, Node]);
+
+<span class="c">// one rule per atom subtype</span>
+s.forall({ a: Carbon }, ({ a }) =&gt; {
+  s.circle({ center: [pos(a).x, pos(a).y], r: <span class="n">24</span>, fill: <span class="s">"#fff"</span>, stroke: <span class="s">"#111827"</span> });
+});
+
+<span class="c">// bonds are predicates, not ad-hoc edges</span>
+s.forallWhere({ a: Node, b: Node }, ({ a, b }) =&gt; SingleBond.test(a, b), ({ a, b }) =&gt; {
+  s.line({ start: center(a), end: center(b), stroke: <span class="s">"#94a3b8"</span>, strokeWidth: <span class="n">9</span> });
+});
+</pre>
+      </section>
+
+      <section class="panel" style="margin-top: 22px">
+        <h2>아직 없는 Penrose 기능</h2>
+        <ul class="limits">
+          <li><code>Image</code>, <code>Ellipse</code>, <code>Equation</code> 도형 — 현재 Circle / Line / Rect / Text만 지원</li>
+          <li><code>collect ... into</code>, <code>Group</code>, CSS <code>filter: blur()</code></li>
+          <li>스타일에서의 <code>override</code>, <code>none()</code>, 색상 함수 <code>rgba()</code>의 선언형 문법</li>
+          <li><code>where x has label</code>, <code>AutoLabel</code>, <code>Label</code> 같은 Trio 문법 설탕</li>
+          <li>상대 레이어(<code>above</code>/<code>below</code>) — 현재는 숫자 <code>layer</code></li>
+          <li><code>.domain</code> / <code>.style</code> / <code>.substance</code> 파일 파서</li>
+        </ul>
+        <p class="note" style="margin-top: 10px">
+          이 예제는 그중 <b>의미 구조와 기하</b>를 Kite API로 직접 옮긴 것입니다. Trio 텍스트 파서나
+          Group/Image 도형이 필요하면 엔진에 추가할 수 있습니다.
+        </p>
+      </section>
+    </main>
+
+    <footer class="shell">
+      <span>Kite · structural formula example</span>
+      <span><a href="../index.html">Playground</a> · <a href="../tests/acceptance.html">Acceptance suite</a></span>
+    </footer>
+
+    <script type="module">
+      import { scene, $, ensure, encourage, ops } from '../kite.js';
+
+      const stage = document.getElementById('mol-stage');
+      const s = scene(stage, { width: 1040, height: 820, seed: 420 });
+
+      /* ------------------------------------------------------------------ */
+      /* Domain                                                              */
+      /* ------------------------------------------------------------------ */
+
+      const Node = s.type('Node');
+      const FunctionalGroup = s.type('FunctionalGroup', Node);
+      const Atom = s.type('Atom', Node);
+      const Hydrogen = s.type('Hydrogen', Atom);
+      const Carbon = s.type('Carbon', Atom);
+      const Nitrogen = s.type('Nitrogen', Atom);
+      const Oxygen = s.type('Oxygen', Atom);
+      const Molecule = s.type('Molecule');
+      const Title = s.type('Title');
+
+      const SingleBond = s.predicate('SingleBond', [Node, Node]);
+      const DoubleBond = s.predicate('DoubleBond', [Node, Node]);
+      const IonicBond = s.predicate('IonicBond', [Node, Node]);
+      const Contains = s.predicate('Contains', [Molecule, Node]);
+
+      /* ------------------------------------------------------------------ */
+      /* Substance — the graph from the Penrose example                      */
+      /* ------------------------------------------------------------------ */
+
+      const pos = new Map();
+      const atoms = new Map();
+
+      function atom(Type, key, x, y) {
+        const inst = Type({ key, element: key[0] });
+        atoms.set(key, inst);
+        pos.set(key, {
+          x: s.input({ init: x, optimized: false }),
+          y: s.input({ init: y, optimized: false }),
+        });
+        return inst;
+      }
+
+      atom(Carbon, 'C1', -145, 80);
+      atom(Carbon, 'C2', -70, -40);
+      atom(Carbon, 'C3', 0, -155);
+      atom(Carbon, 'C4', 0, 80);
+      atom(Carbon, 'C5', 70, 40);
+      atom(Carbon, 'C6', 70, -40);
+      atom(Carbon, 'C7', 175, 135);
+      atom(Carbon, 'C8', 200, 0);
+
+      atom(Nitrogen, 'N1', 0, -80);
+      atom(Nitrogen, 'N2', -70, 40);
+      atom(Nitrogen, 'N3', 140, 60);
+      atom(Nitrogen, 'N4', 140, -60);
+
+      atom(Oxygen, 'O1', 0, 160);
+      atom(Oxygen, 'O2', -105, -120);
+
+      atom(Hydrogen, 'H1', 285, 0);
+      atom(Hydrogen, 'H2', 235, 175);
+      atom(Hydrogen, 'H3', 230, 105);
+      atom(Hydrogen, 'H4', 150, 215);
+      atom(Hydrogen, 'H5', -215, 105);
+      atom(Hydrogen, 'H6', -210, 40);
+      atom(Hydrogen, 'H7', -140, 150);
+      atom(Hydrogen, 'H8', -50, -215);
+      atom(Hydrogen, 'H9', 50, -215);
+      atom(Hydrogen, 'H10', 0, -245);
+
+      const SINGLE = [
+        ['N2', 'C4'], ['C4', 'C5'], ['C6', 'N1'], ['N1', 'C2'], ['N2', 'C2'],
+        ['N2', 'C1'], ['C1', 'H7'], ['C1', 'H6'], ['C1', 'H5'], ['C7', 'H4'],
+        ['C7', 'H3'], ['H2', 'C7'], ['N3', 'C7'], ['N3', 'C5'], ['C8', 'N3'],
+        ['N4', 'C6'], ['C8', 'H1'], ['C3', 'H10'], ['C3', 'H8'], ['C3', 'H9'],
+        ['N1', 'C3'],
+      ];
+      const DOUBLE = [
+        ['C5', 'C6'], ['C2', 'O2'], ['C4', 'O1'], ['C8', 'N4'],
+      ];
+      for (const [a, b] of SINGLE) SingleBond(atoms.get(a), atoms.get(b));
+      for (const [a, b] of DOUBLE) DoubleBond(atoms.get(a), atoms.get(b));
+
+      const caffeine = Molecule({ label: 'caffeine', formula: 'C8H10N4O2' });
+      for (const a of atoms.values()) Contains(caffeine, a);
+
+      const methyls = [
+        FunctionalGroup({ label: 'CH3', cx: -180, cy: 95, w: 136, h: 146 }),
+        FunctionalGroup({ label: 'CH3', cx: 0, cy: -205, w: 152, h: 112 }),
+        FunctionalGroup({ label: 'CH3', cx: 196, cy: 160, w: 152, h: 146 }),
+      ];
+      const title = Title({ label: 'caffeine', formula: 'C8H10N4O2' });
+
+      /* ------------------------------------------------------------------ */
+      /* Style / geometry                                                    */
+      /* ------------------------------------------------------------------ */
+
+      const STYLE = {
+        Carbon: { r: 24, fill: '#ffffff', stroke: '#111827', text: '#111827', label: '' },
+        Nitrogen: { r: 25, fill: '#eef2ff', stroke: '#2f5de3', text: '#1d4ed8', label: 'N' },
+        Oxygen: { r: 25, fill: '#fef2f2', stroke: '#dc2626', text: '#b91c1c', label: 'O' },
+        Hydrogen: { r: 16, fill: '#f8fafc', stroke: '#64748b', text: '#475569', label: 'H' },
+      };
+
+      function drawAtom(Type, key, style) {
+        s.forall({ a: Type }, ({ a }) => {
+          const p = pos.get(a.key);
+          s.circle({
+            center: [p.x, $`${p.y} - 6`],
+            r: style.r + 2,
+            fill: '#0f172a',
+            stroke: 'none',
+            opacity: 0.06,
+            layer: 0.5,
+          });
+          s.circle({
+            center: [p.x, p.y],
+            r: style.r,
+            fill: style.fill,
+            stroke: style.stroke,
+            strokeWidth: 2.5,
+            layer: 3,
+          });
+          if (style.label) {
+            s.text({
+              center: [p.x, p.y],
+              string: style.label,
+              fontSize: style.r > 20 ? 14 : 10,
+              fill: style.text,
+              stroke: 'none',
+              layer: 4,
+            });
+          }
+        });
+      }
+
+      drawAtom(Carbon, 'Carbon', STYLE.Carbon);
+      drawAtom(Nitrogen, 'Nitrogen', STYLE.Nitrogen);
+      drawAtom(Oxygen, 'Oxygen', STYLE.Oxygen);
+      drawAtom(Hydrogen, 'Hydrogen', STYLE.Hydrogen);
+
+      // Functional-group boxes sit behind bonds and atoms.
+      s.forall({ g: FunctionalGroup }, ({ g }) => {
+        s.rect({
+          center: [g.cx, g.cy],
+          width: g.w,
+          height: g.h,
+          fill: 'rgba(148,163,184,0.05)',
+          stroke: '#e2e8f0',
+          strokeWidth: 1,
+          layer: 0,
+        });
+      });
+
+      function centers(a, b) {
+        const A = pos.get(a.key);
+        const B = pos.get(b.key);
+        return { A, B };
+      }
+
+      function parallelFrame(A, B) {
+        const dx = $`${B.x} - ${A.x}`;
+        const dy = $`${B.y} - ${A.y}`;
+        const len = $`sqrt(${dx} * ${dx} + ${dy} * ${dy})`;
+        const ux = $`${dx} / ${len}`;
+        const uy = $`${dy} / ${len}`;
+        const px = $`-${uy}`;
+        const py = $`${ux}`;
+        return { px, py };
+      }
+
+      function shifted(A, px, py, k) {
+        return [$`${A.x} + ${px} * ${k}`, $`${A.y} + ${py} * ${k}`];
+      }
+
+      function tubeLine(start, end) {
+        s.line({ start: start, end: end, stroke: '#94a3b8', strokeWidth: 9, layer: 1 });
+        s.line({ start: start, end: end, stroke: '#f8fafc', strokeWidth: 3.5, layer: 1 });
+      }
+
+      s.forallWhere({ a: Node, b: Node }, ({ a, b }) => SingleBond.test(a, b), ({ a, b }) => {
+        const { A, B } = centers(a, b);
+        tubeLine([A.x, A.y], [B.x, B.y]);
+      });
+
+      s.forallWhere({ a: Node, b: Node }, ({ a, b }) => DoubleBond.test(a, b), ({ a, b }) => {
+        const { A, B } = centers(a, b);
+        const { px, py } = parallelFrame(A, B);
+        for (const k of [-8, 8]) {
+          tubeLine(shifted(A, px, py, k), shifted(B, px, py, k));
+        }
+      });
+
+      // Ionic bonds are part of the domain but caffeine has none.
+      s.forallWhere({ a: Node, b: Node }, ({ a, b }) => IonicBond.test(a, b), ({ a, b }) => {
+        const { A, B } = centers(a, b);
+        s.line({ start: [A.x, A.y], end: [B.x, B.y], stroke: '#0d9488', strokeWidth: 2.5, layer: 1 });
+      });
+
+      s.forall({ t: Title }, ({ t }) => {
+        s.text({ center: [0, 350], string: t.label, fontSize: 34, fill: '#0f172a', stroke: 'none', layer: 4 });
+        s.text({ center: [0, 316], string: t.formula, fontSize: 14, fill: '#98a2b3', stroke: 'none', layer: 4 });
+      });
+
+      s.step();
+
+      window.__KITE_CAFFEINE = {
+        s,
+        atoms: atoms.size,
+        bonds: SINGLE.length + DOUBLE.length,
+        groups: methyls.length,
+        title: title.label,
+      };
+    </script>
+  </body>
+</html>

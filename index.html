@@ -127,6 +127,8 @@
       footer { margin-top: 92px; border-top: 1px solid var(--line); padding: 26px 0 46px; color: var(--faint); font-size: 12px; display: flex; justify-content: space-between; gap: 24px; }
       footer a { color: #475467; text-decoration: none; }
       .add-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+      .range-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+      .range-row input[type="range"] { flex: 1; accent-color: var(--accent); }
       .small { font-size: 11.5px; color: var(--muted); }
       @media (max-width: 980px) {
         .hero, .grid-2, .dsl-wrap { grid-template-columns: 1fr; }
@@ -149,7 +151,9 @@
         <div class="brand"><span class="mark">◇</span> Kite</div>
         <div class="nav-links">
           <a href="#play">Playground</a>
+          <a href="#examples">Examples</a>
           <a href="#api">API</a>
+          <a href="examples/caffeine.html">Molecule</a>
           <a href="#diagram">&lt;kite-diagram&gt;</a>
           <a href="tests/acceptance.html">Acceptance tests</a>
         </div>
@@ -233,6 +237,64 @@
         </div>
       </section>
 
+      <section class="section" id="examples">
+        <div class="section-head">
+          <div>
+            <h2>Six more manifolds.</h2>
+            <p>삼각함수, 상자 벽, 링크 기구, 직각, 렌즈, 외부 입력. 같은 <code>ensure</code> / <code>ops</code>로 선언하고, 점을 잡아 끌면 솔버가 그 다양체 위로 되돌립니다.</p>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="demo-card">
+            <div class="mini-stage" id="sine-stage"></div>
+            <div class="demo-body">
+              <div class="demo-title"><h3>Sine wave</h3><span class="chip">sin · inequalities</span></div>
+              <p><code>y = 52·sin(x/34)</code>. 곡선 밖으로 끌어도 파형 위로 돌아옵니다. 좌우 끝은 하드 부등식입니다.</p>
+            </div>
+          </div>
+          <div class="demo-card">
+            <div class="mini-stage" id="box-stage"></div>
+            <div class="demo-body">
+              <div class="demo-title"><h3>Inside the box</h3><span class="chip">four inequalities</span></div>
+              <p>네 개의 하드 부등식이 벽을 만듭니다. 모서리로 끌면 벽을 따라 미끄러지고, 상자 밖으로는 나가지 않습니다.</p>
+            </div>
+          </div>
+          <div class="demo-card">
+            <div class="mini-stage" id="linkage-stage"></div>
+            <div class="demo-body">
+              <div class="demo-title"><h3>Three-bar linkage</h3><span class="chip">pinned hinge · length</span></div>
+              <p>검은 힌지는 고정입니다. 1·2·3 관절을 끌면 막대 길이 78px이 유지된 채 팔이 접힙니다.</p>
+            </div>
+          </div>
+          <div class="demo-card">
+            <div class="mini-stage" id="square-stage"></div>
+            <div class="demo-body">
+              <div class="demo-title"><h3>Right angle</h3><span class="chip">ops.dot == 0</span></div>
+              <p>두 막대의 내적이 0이고 길이는 110입니다. 한쪽 끝을 돌리면 다른 쪽이 직각을 유지합니다.</p>
+            </div>
+          </div>
+          <div class="demo-card">
+            <div class="mini-stage" id="lens-stage"></div>
+            <div class="demo-body">
+              <div class="demo-title"><h3>Lens</h3><span class="chip">overlapping · contains</span></div>
+              <p>두 큰 원은 36px 이상 겹쳐야 하고, 빨간 점은 그 교집합 안에만 머뭅니다.</p>
+            </div>
+          </div>
+          <div class="demo-card">
+            <div class="mini-stage" id="bead-stage"></div>
+            <div class="demo-body">
+              <div class="demo-title"><h3>Bead on a segment</h3><span class="chip">setInput</span></div>
+              <p>구슬은 x축 선분 위에만 있습니다. 길이를 줄이면 구슬이 구간 안으로 밀립니다.</p>
+              <label class="range-row" for="bead-len">
+                <span class="small">길이</span>
+                <input id="bead-len" type="range" min="80" max="420" step="1" value="220" />
+                <span class="small" id="bead-len-label">220px</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section class="section" id="api">
         <div class="section-head">
           <div>
@@ -302,11 +364,17 @@ ensure`${ops.dist(planet.center, orbit.center)} == ${orbit.r}`;
 
     <footer class="shell">
       <span>Kite · RFC-0001 implementation</span>
-      <span><a href="tests/acceptance.html">Acceptance suite</a> · <a href="https://github.com/penrose/penrose">Penrose lineage</a></span>
+      <span><a href="tests/acceptance.html">Acceptance suite</a> · <a href="examples/caffeine.html">Caffeine</a> · <a href="https://github.com/penrose/penrose">Penrose lineage</a></span>
     </footer>
 
     <script type="module">
       import { scene, $, ensure, ops } from './kite.js';
+      import { mountSine } from './examples/sine.js';
+      import { mountBox } from './examples/box.js';
+      import { mountLinkage } from './examples/linkage.js';
+      import { mountSquare } from './examples/square.js';
+      import { mountLens } from './examples/lens.js';
+      import { mountBead } from './examples/bead.js';
 
       /* ------------------------------------------------------------------ */
       /* Hero: orbit manifold                                                */
@@ -470,7 +538,18 @@ ensure`${ops.dist(planet.center, orbit.center)} == ${orbit.r}`;
         refreshPlanetCount();
       });
 
-      window.__kiteDemo = { os, ss, es, ds };
+      const sine = mountSine(document.getElementById('sine-stage'));
+      const box = mountBox(document.getElementById('box-stage'));
+      const linkage = mountLinkage(document.getElementById('linkage-stage'));
+      const square = mountSquare(document.getElementById('square-stage'));
+      const lens = mountLens(document.getElementById('lens-stage'));
+      const bead = mountBead(
+        document.getElementById('bead-stage'),
+        document.getElementById('bead-len'),
+        document.getElementById('bead-len-label'),
+      );
+
+      window.__kiteDemo = { os, ss, es, ds, sine, box, linkage, square, lens, bead };
     </script>
   </body>
 </html>
