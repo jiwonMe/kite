@@ -80,7 +80,7 @@
           <h1>The same examples, <em>declared</em>.</h1>
           <p class="lede">
             Penrose 예제 갤러리에서 2D로 표현 가능한 대표 13개를 골라 Kite 장면으로 옮겼습니다.
-            각 카드는 독립된 <code>KiteScene</code>이며, 도형·라벨·제약·레이어는 원본 Trio의 구조를 따릅니다.
+            각 카드는 독립된 <code>KiteScene</code>입니다. <b>노드를 드래그</b>하면 연결된 선·라벨이 따라오고, 빈 배경을 드래그하면 카메라가 팬됩니다.
           </p>
           <div class="chips">
             <span class="chip">set theory</span><span class="chip">continuous maps</span>
@@ -118,7 +118,7 @@
     </footer>
 
     <script type="module">
-      import { scene, $, ensure, ops, rgba } from '../kite.js';
+      import { scene, $, ensure, encourage, ops, rgba } from '../kite.js';
 
       const INK = '#111827';
       const MUTED = '#667085';
@@ -131,7 +131,7 @@
 
       const scenes = [];
       function make(stageId, seed) {
-        const s = scene(document.getElementById(stageId), { width: 520, height: 360, seed });
+        const s = scene(document.getElementById(stageId), { width: 520, height: 360, seed, warmStart: false });
         scenes.push(s);
         return s;
       }
@@ -140,6 +140,41 @@
       }
       function setCircle(s, x, y, r, fill, stroke, layer = 1) {
         return s.circle({ center: [x, y], r, fill, stroke, strokeWidth: 1.4, layer });
+      }
+      function vpos(s, x, y) {
+        return [s.input({ init: x }), s.input({ init: y })];
+      }
+      function plus(p, dx, dy) {
+        return [$`${p[0]} + ${dx}`, $`${p[1]} + ${dy}`];
+      }
+      // Procedural/no-node cards still respond to drag by panning the viewBox.
+      function enablePan(s) {
+        const svg = s._svg;
+        if (!svg) return;
+        let start = null;
+        let vb = null;
+        svg.addEventListener('pointerdown', (e) => {
+          if (s._hitTest && s._hitTest(...s._worldFromEvent(e), true)) return;
+          start = { x: e.clientX, y: e.clientY };
+          vb = svg.getAttribute('viewBox').split(' ').map(Number);
+          svg.setPointerCapture(e.pointerId);
+          svg.style.cursor = 'grabbing';
+        });
+        svg.addEventListener('pointermove', (e) => {
+          if (!start || !vb) return;
+          const dx = ((e.clientX - start.x) / svg.getBoundingClientRect().width) * vb[2];
+          const dy = ((e.clientY - start.y) / svg.getBoundingClientRect().height) * vb[3];
+          svg.setAttribute('viewBox', [vb[0] - dx, vb[1] - dy, vb[2], vb[3]].join(' '));
+        });
+        const end = (e) => {
+          if (!start) return;
+          start = null;
+          svg.style.cursor = 'grab';
+          try { svg.releasePointerCapture(e.pointerId); } catch (_) {}
+        };
+        svg.addEventListener('pointerup', end);
+        svg.addEventListener('pointercancel', end);
+        svg.style.cursor = 'grab';
       }
 
       const EXAMPLES = [];
@@ -154,16 +189,26 @@
         source: 'set-theory-domain/tree-euler',
         build() {
           const s = make('stage-tree-euler', 11);
-          setCircle(s, 0, 0, 150, 'rgba(47,93,227,0.06)', BLUE);
-          setCircle(s, -60, 4, 70, 'rgba(16,185,129,0.13)', GREEN);
-          setCircle(s, 72, 0, 55, 'rgba(245,158,11,0.14)', ORANGE);
-          setCircle(s, -75, -18, 28, 'rgba(124,58,237,0.16)', VIOLET);
-          setCircle(s, 88, 8, 22, 'rgba(236,72,153,0.16)', '#db2777');
-          text(s, 'A', 0, 128, 17, INK);
-          text(s, 'B', -60, 45, 15, INK);
-          text(s, 'C', 72, 40, 15, INK);
-          text(s, 'D', -75, -18, 13, INK);
-          text(s, 'E', 88, 8, 12, INK);
+          const P = {
+            A: vpos(s, 0, 0), B: vpos(s, -60, 4), C: vpos(s, 72, 0),
+            D: vpos(s, -75, -18), E: vpos(s, 88, 8),
+          };
+          const c = {};
+          c.A = s.circle({ center: P.A, r: 150, fill: 'rgba(47,93,227,0.06)', stroke: BLUE, strokeWidth: 1.4, drag: true, layer: 1 });
+          c.B = s.circle({ center: P.B, r: 70, fill: 'rgba(16,185,129,0.13)', stroke: GREEN, strokeWidth: 1.4, drag: true, layer: 1 });
+          c.C = s.circle({ center: P.C, r: 55, fill: 'rgba(245,158,11,0.14)', stroke: ORANGE, strokeWidth: 1.4, drag: true, layer: 1 });
+          c.D = s.circle({ center: P.D, r: 28, fill: 'rgba(124,58,237,0.16)', stroke: VIOLET, strokeWidth: 1.4, drag: true, layer: 1 });
+          c.E = s.circle({ center: P.E, r: 22, fill: 'rgba(236,72,153,0.16)', stroke: '#db2777', strokeWidth: 1.4, drag: true, layer: 1 });
+          ensure(ops.contains({ center: P.A, r: 150 }, { center: P.B, r: 70 }, 8));
+          ensure(ops.contains({ center: P.A, r: 150 }, { center: P.C, r: 55 }, 8));
+          ensure(ops.disjoint({ center: P.B, r: 70 }, { center: P.C, r: 55 }, 8));
+          ensure(ops.contains({ center: P.B, r: 70 }, { center: P.D, r: 28 }, 4));
+          ensure(ops.contains({ center: P.C, r: 55 }, { center: P.E, r: 22 }, 4));
+          text(s, 'A', ...plus(P.A, 0, 128), 17, INK);
+          text(s, 'B', ...plus(P.B, 0, 45), 15, INK);
+          text(s, 'C', ...plus(P.C, 0, 40), 15, INK);
+          text(s, 'D', ...plus(P.D, 0, 0), 13, INK);
+          text(s, 'E', ...plus(P.E, 0, 0), 12, INK);
         },
       });
 
@@ -177,19 +222,31 @@
         source: 'set-theory-domain/continuousmap',
         build() {
           const s = make('stage-continuousmap', 12);
+          const sides = [];
           for (const [cx, nameOuter, nameMid, nameIn] of [
             [-145, 'R^n', 'A', 'U'],
             [145, 'R^m', 'B', 'V'],
           ]) {
-            setCircle(s, cx, 0, 105, 'rgba(47,93,227,0.04)', '#94a3b8');
-            setCircle(s, cx, 0, 76, 'rgba(47,93,227,0.09)', BLUE);
-            setCircle(s, cx, 0, 42, 'rgba(16,185,129,0.14)', GREEN);
-            s.equation({ center: [cx, 66], string: nameOuter, fontSize: 15, fill: MUTED, stroke: 'none', layer: 5 });
-            text(s, nameMid, cx, 22, 15, INK);
-            text(s, nameIn, cx, -14, 13, INK);
+            const O = vpos(s, cx, 0), M = vpos(s, cx, 0), I = vpos(s, cx, 0);
+            sides.push({ O, M, I });
+            s.circle({ center: O, r: 105, fill: 'rgba(47,93,227,0.04)', stroke: '#94a3b8', strokeWidth: 1.4, drag: true, layer: 1 });
+            s.circle({ center: M, r: 76, fill: 'rgba(47,93,227,0.09)', stroke: BLUE, strokeWidth: 1.4, drag: true, layer: 1 });
+            s.circle({ center: I, r: 42, fill: 'rgba(16,185,129,0.14)', stroke: GREEN, strokeWidth: 1.4, drag: true, layer: 1 });
+            ensure(ops.contains({ center: O, r: 105 }, { center: M, r: 76 }, 6));
+            ensure(ops.contains({ center: M, r: 76 }, { center: I, r: 42 }, 4));
+            s.equation({ center: plus(O, 0, 66), string: nameOuter, fontSize: 15, fill: MUTED, stroke: 'none', layer: 5 });
+            text(s, nameMid, ...plus(M, 0, 22), 15, INK);
+            text(s, nameIn, ...plus(I, 0, -14), 13, INK);
           }
-          s.line({ start: [-100, 0], end: [100, 0], stroke: INK, strokeWidth: 1.6, arrowEnd: true, layer: 4 });
-          s.equation({ center: [0, 14], string: 'f', fontSize: 17, fill: INK, stroke: 'none', layer: 5 });
+          const [L, R] = sides;
+          s.line({
+            start: plus(L.M, 76, 0), end: plus(R.M, -76, 0),
+            stroke: INK, strokeWidth: 1.6, arrowEnd: true, layer: 4,
+          });
+          s.equation({
+            center: [$`(${L.M[0]} + ${R.M[0]}) / 2`, $`(${L.M[1]} + ${R.M[1]}) / 2 + 14`],
+            string: 'f', fontSize: 17, fill: INK, stroke: 'none', layer: 5,
+          });
         },
       });
 
@@ -203,10 +260,11 @@
         source: 'graph-domain/textbook/sec1/fig5',
         build() {
           const s = make('stage-fig5', 13);
-          const P = {
+          const Q = {
             Chicago: [0, 60], Denver: [-120, 20], Detroit: [60, 100],
             LA: [-180, -90], NYC: [150, 40], SF: [-200, -20], Washington: [120, -80],
           };
+          const P = Object.fromEntries(Object.entries(Q).map(([k, [x, y]]) => [k, vpos(s, x, y)]));
           const links = [
             ['Chicago', 'Denver'], ['Chicago', 'Denver'], ['Chicago', 'Detroit'],
             ['Chicago', 'NYC'], ['Chicago', 'NYC'], ['Chicago', 'Washington'],
@@ -223,21 +281,21 @@
           for (const list of groups.values()) {
             const n = list.length;
             list.forEach(([a, b], idx) => {
-              const [ax, ay] = P[a];
-              const [bx, by] = P[b];
+              const [ax, ay] = Q[a];
+              const [bx, by] = Q[b];
               const dx = bx - ax, dy = by - ay;
               const len = Math.hypot(dx, dy) || 1;
               const ox = (-dy / len) * (idx - (n - 1) / 2) * 9;
               const oy = (dx / len) * (idx - (n - 1) / 2) * 9;
               s.line({
-                start: [ax + ox, ay + oy], end: [bx + ox, by + oy],
+                start: plus(P[a], ox, oy), end: plus(P[b], ox, oy),
                 stroke: '#94a3b8', strokeWidth: 1.1, arrowEnd: true, layer: 1,
               });
             });
           }
-          for (const [name, [x, y]] of Object.entries(P)) {
-            s.circle({ center: [x, y], r: 9, fill: '#fff', stroke: INK, strokeWidth: 1.6, layer: 3 });
-            text(s, name, x, y - 17, 10.5, INK, 5);
+          for (const name of Object.keys(P)) {
+            s.circle({ center: P[name], r: 9, fill: '#fff', stroke: INK, strokeWidth: 1.6, drag: true, layer: 3 });
+            text(s, name, ...plus(P[name], 0, -17), 10.5, INK, 5);
           }
         },
       });
@@ -252,38 +310,38 @@
         source: 'logic-circuit-domain/half-adder',
         build() {
           const s = make('stage-half-adder', 14);
-          const wire = (pts, arrow = true) => {
-            for (let i = 0; i < pts.length - 1; i++) {
-              s.line({
-                start: pts[i], end: pts[i + 1], stroke: MUTED, strokeWidth: 1.5,
-                arrowEnd: arrow && i === pts.length - 2, layer: 1,
-              });
-            }
+          const P = {
+            s1: vpos(s, -140, 70), s2: vpos(s, -140, -70),
+            xor: vpos(s, 0, 48), and: vpos(s, 0, -58),
           };
-          const box = (x, y, w, h, label, fill = '#eef2ff') => {
-            s.rect({ center: [x, y], width: w, height: h, cornerRadius: 7, fill, stroke: BLUE, strokeWidth: 1.5, layer: 2 });
-            text(s, label, x, y, 11, INK, 5);
+          const IN1 = [-215, 70], IN2 = [-215, -70], OUT1 = [210, 48], OUT2 = [210, -58];
+          const wire = (a, b, arrow = true) => {
+            s.line({ start: a, end: b, stroke: MUTED, strokeWidth: 1.5, arrowEnd: arrow, layer: 1 });
           };
-          s.circle({ center: [-215, 70], r: 13, fill: '#fff', stroke: INK, layer: 2 });
-          s.circle({ center: [-215, -70], r: 13, fill: '#fff', stroke: INK, layer: 2 });
-          text(s, 'A', -215, 70, 11, INK);
-          text(s, 'B', -215, -70, 11, INK);
-          box(-140, 70, 46, 34, '1→2', '#f8fafc');
-          box(-140, -70, 46, 34, '1→2', '#f8fafc');
-          box(0, 48, 80, 50, 'XOR');
-          box(0, -58, 80, 50, 'AND');
-          wire([[-202, 70], [-163, 70]]);
-          wire([[-202, -70], [-163, -70]]);
-          wire([[-117, 79], [-80, 79], [-80, 60], [-40, 60]]);
-          wire([[-117, 61], [-95, 61], [-95, -48], [-40, -48]]);
-          wire([[-117, -61], [-75, -61], [-75, 36], [-40, 36]]);
-          wire([[-117, -79], [-60, -79], [-60, -68], [-40, -68]]);
-          wire([[40, 48], [190, 48]]);
-          wire([[40, -58], [190, -58]]);
-          s.circle({ center: [210, 48], r: 13, fill: '#fff', stroke: INK, layer: 2 });
-          s.circle({ center: [210, -58], r: 13, fill: '#fff', stroke: INK, layer: 2 });
-          text(s, 'S', 210, 48, 11, INK);
-          text(s, 'C', 210, -58, 11, INK);
+          const box = (p, w, h, label, fill = '#eef2ff') => {
+            s.rect({ center: p, width: w, height: h, cornerRadius: 7, fill, stroke: BLUE, strokeWidth: 1.5, drag: true, layer: 2 });
+            text(s, label, ...p, 11, INK, 5);
+          };
+          s.circle({ center: IN1, r: 13, fill: '#fff', stroke: INK, layer: 2 });
+          s.circle({ center: IN2, r: 13, fill: '#fff', stroke: INK, layer: 2 });
+          text(s, 'A', ...IN1, 11, INK);
+          text(s, 'B', ...IN2, 11, INK);
+          box(P.s1, 46, 34, '1→2', '#f8fafc');
+          box(P.s2, 46, 34, '1→2', '#f8fafc');
+          box(P.xor, 80, 50, 'XOR');
+          box(P.and, 80, 50, 'AND');
+          wire([-202, 70], plus(P.s1, -23, 0));
+          wire([-202, -70], plus(P.s2, -23, 0));
+          wire(P.s1, P.xor);
+          wire(P.s1, P.and);
+          wire(P.s2, P.xor);
+          wire(P.s2, P.and);
+          wire(P.xor, [190, 48]);
+          wire(P.and, [190, -58]);
+          s.circle({ center: OUT1, r: 13, fill: '#fff', stroke: INK, layer: 2 });
+          s.circle({ center: OUT2, r: 13, fill: '#fff', stroke: INK, layer: 2 });
+          text(s, 'S', ...OUT1, 11, INK);
+          text(s, 'C', ...OUT2, 11, INK);
         },
       });
 
@@ -345,17 +403,17 @@
           const my = data.reduce((a, p) => a + p[1], 0) / n;
           let cov = 0, varx = 0;
           for (const [x, y] of data) { cov += (x - mx) * (y - my); varx += (x - mx) ** 2; }
-          const beta = cov / varx;
-          const alpha = my - beta * mx;
+          const beta0 = cov / varx;
+          const alpha0 = my - beta0 * mx;
           for (const [x, y] of data) {
             s.circle({ center: [x * scale, y * scale], r: 3.2, fill: INK, stroke: 'none', layer: 2 });
           }
           s.line({
-            start: [-7 * scale, (alpha + beta * -7) * scale],
-            end: [7 * scale, (alpha + beta * 7) * scale],
+            start: [-7 * scale, (alpha0 + beta0 * -7) * scale],
+            end: [7 * scale, (alpha0 + beta0 * 7) * scale],
             stroke: RED, strokeWidth: 2, arrowEnd: true, layer: 3,
           });
-          text(s, 'y = ' + beta.toFixed(2) + 'x + ' + alpha.toFixed(2), -220, 150, 11, RED, 5);
+          text(s, 'drag background to pan · static fit', -220, 150, 10, RED, 5);
         },
       });
 
@@ -377,17 +435,19 @@
           ];
           s.rect({ center: [0, 0], width: 24, height: 300, cornerRadius: 10, fill: '#eef2ff', stroke: '#94a3b8', strokeWidth: 1.2, layer: 1 });
           text(s, 'BUS', 0, 162, 10, MUTED);
-          const box = (x, y, label) => {
-            s.rect({ center: [x, y], width: 116, height: 36, cornerRadius: 7, fill: '#fff', stroke: '#94a3b8', strokeWidth: 1.2, layer: 2 });
-            text(s, label, x, y, 9.5, INK, 5);
+          const box = (p, label) => {
+            s.rect({ center: p, width: 116, height: 36, cornerRadius: 7, fill: '#fff', stroke: '#94a3b8', strokeWidth: 1.2, drag: true, layer: 2 });
+            text(s, label, ...p, 9.5, INK, 5);
           };
           for (const [label, y] of left) {
-            box(-155, y, label);
-            s.line({ start: [-97, y], end: [-14, y], stroke: MUTED, strokeWidth: 1.2, arrowEnd: true, layer: 1 });
+            const p = vpos(s, -155, y);
+            box(p, label);
+            s.line({ start: plus(p, 58, 0), end: [-14, p[1]], stroke: MUTED, strokeWidth: 1.2, arrowEnd: true, layer: 1 });
           }
           for (const [label, y] of right) {
-            box(155, y, label);
-            s.line({ start: [14, y], end: [97, y], stroke: MUTED, strokeWidth: 1.2, arrowEnd: true, layer: 1 });
+            const p = vpos(s, 155, y);
+            box(p, label);
+            s.line({ start: [14, p[1]], end: plus(p, -58, 0), stroke: MUTED, strokeWidth: 1.2, arrowEnd: true, layer: 1 });
           }
         },
       });
@@ -406,7 +466,7 @@
           const pos = {};
           labels.forEach((k, i) => {
             const a = -Math.PI / 2 + (i * 2 * Math.PI) / labels.length;
-            pos[k] = [Math.cos(a) * 132, Math.sin(a) * 132];
+            pos[k] = vpos(s, Math.cos(a) * 132, Math.sin(a) * 132);
           });
           const cycle = [['a','b'],['b','c'],['c','d'],['d','e'],['e','f'],['f','g'],['g','a']];
           const extras = [['a','c'],['a','d'],['b','e'],['b','f'],['c','g'],['d','f']];
@@ -417,8 +477,8 @@
             s.line({ start: pos[a], end: pos[b], stroke: BLUE, strokeWidth: 3, layer: 2 });
           }
           for (const k of labels) {
-            s.circle({ center: pos[k], r: 12, fill: '#fff', stroke: INK, strokeWidth: 1.6, layer: 3 });
-            text(s, k, pos[k][0], pos[k][1], 11, INK);
+            s.circle({ center: pos[k], r: 12, fill: '#fff', stroke: INK, strokeWidth: 1.6, drag: true, layer: 3 });
+            text(s, k, ...pos[k], 11, INK);
           }
           text(s, 'cycle: a–b–c–d–e–f–g–a', -220, 160, 10, BLUE);
         },
@@ -501,7 +561,7 @@
           const pos = {};
           order.forEach((k, i) => {
             const a = -Math.PI / 2 + (i * 2 * Math.PI) / order.length;
-            pos[k] = [Math.cos(a) * 120, Math.sin(a) * 120];
+            pos[k] = vpos(s, Math.cos(a) * 120, Math.sin(a) * 120);
           });
           const cycles = [
             { color: BLUE, pairs: [['1','i'],['i','-1'],['-1','-i'],['-i','1'],['j','k'],['k','-j'],['-j','-k'],['-k','j']] },
@@ -518,8 +578,8 @@
             }
           }
           for (const k of order) {
-            s.circle({ center: pos[k], r: 14, fill: '#fff', stroke: INK, strokeWidth: 1.5, layer: 3 });
-            text(s, k, pos[k][0], pos[k][1], k.length > 1 ? 9.5 : 12, INK);
+            s.circle({ center: pos[k], r: 14, fill: '#fff', stroke: INK, strokeWidth: 1.5, drag: true, layer: 3 });
+            text(s, k, ...pos[k], k.length > 1 ? 9.5 : 12, INK);
           }
           text(s, 'generators: i', -230, 160, 10, BLUE);
           text(s, 'j', -180, 160, 10, GREEN);
@@ -541,7 +601,7 @@
             const out = [];
             let i = 0;
             for (const x of [-1, 1]) for (const y of [-1, 1]) for (const z of [-1, 1]) {
-              out[i++] = [dx + (x - 0.55 * z) * scale, dy + (y - 0.3 * z) * scale];
+              out[i++] = vpos(s, dx + (x - 0.55 * z) * scale, dy + (y - 0.3 * z) * scale);
             }
             return out;
           };
@@ -560,8 +620,8 @@
             s.line({ start: inner[i], end: outer[i], stroke: '#f59e0b', strokeWidth: 1.2, layer: 1 });
           }
           for (let i = 0; i < 8; i++) {
-            s.circle({ center: inner[i], r: 4, fill: BLUE, stroke: '#fff', strokeWidth: 1, layer: 3 });
-            s.circle({ center: outer[i], r: 4, fill: ORANGE, stroke: '#fff', strokeWidth: 1, layer: 3 });
+            s.circle({ center: inner[i], r: 4, fill: BLUE, stroke: '#fff', strokeWidth: 1, drag: true, layer: 3 });
+            s.circle({ center: outer[i], r: 4, fill: ORANGE, stroke: '#fff', strokeWidth: 1, drag: true, layer: 3 });
           }
         },
       });
@@ -583,7 +643,10 @@
             H5: [-215, 105], H6: [-210, 40], H7: [-140, 150], H8: [-50, -215], H9: [50, -215], H10: [0, -245],
           };
           const k = 0.52;
-          const at = (id) => [P[id][0] * k, P[id][1] * k];
+          const P2 = Object.fromEntries(
+            Object.entries(P).map(([id, [x, y]]) => [id, vpos(s, x * k, y * k)]),
+          );
+          const at = (id) => P2[id];
           const singles = [
             ['N2','C4'],['C4','C5'],['C6','N1'],['N1','C2'],['N2','C2'],['N2','C1'],['C1','H7'],
             ['C1','H6'],['C1','H5'],['C7','H4'],['C7','H3'],['H2','C7'],['N3','C7'],['N3','C5'],
@@ -594,14 +657,14 @@
             s.line({ start: at(a), end: at(b), stroke: '#94a3b8', strokeWidth: 3.2, layer: 1 });
           }
           for (const [a, b] of doubles) {
-            const [ax, ay] = at(a), [bx, by] = at(b);
+            const [ax, ay] = P[a], [bx, by] = P[b];
             const dx = bx - ax, dy = by - ay;
             const len = Math.hypot(dx, dy) || 1;
             const ox = (-dy / len) * 2.2, oy = (dx / len) * 2.2;
             for (const sgn of [-1, 1]) {
               s.line({
-                start: [ax + ox * sgn, ay + oy * sgn],
-                end: [bx + ox * sgn, by + oy * sgn],
+                start: plus(at(a), ox * sgn, oy * sgn),
+                end: plus(at(b), ox * sgn, oy * sgn),
                 stroke: '#94a3b8', strokeWidth: 2.4, layer: 1,
               });
             }
@@ -615,7 +678,7 @@
           for (const id of Object.keys(P)) {
             const [x, y] = at(id);
             const st = style[id[0]];
-            s.circle({ center: [x, y], r: st.r, fill: st.fill, stroke: st.stroke, strokeWidth: 1.6, layer: 3 });
+            s.circle({ center: [x, y], r: st.r, fill: st.fill, stroke: st.stroke, strokeWidth: 1.6, drag: true, layer: 3 });
             if (st.label) text(s, st.label, x, y, st.r > 10 ? 7.5 : 6, INK);
           }
           text(s, 'caffeine · C8H10N4O2', 0, 152, 9, MUTED);
@@ -636,7 +699,11 @@
           '<a href="https://github.com/penrose/penrose/tree/main/packages/examples/src/' + ex.source + '">source ↗</a></div>';
         grid.appendChild(card);
       }
-      for (const ex of EXAMPLES) ex.build();
+      for (const ex of EXAMPLES) {
+        try { ex.build(); } catch (err) { console.error('[gallery] ' + ex.id, err); }
+      }
+      await Promise.all(scenes.map((sc) => sc.mount()));
+      for (const sc of scenes) enablePan(sc);
 
       window.__GALLERY = { scenes, examples: EXAMPLES.map((e) => e.id) };
     </script>

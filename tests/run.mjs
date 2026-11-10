@@ -454,6 +454,69 @@ try {
   check('gallery: every scene rendered', gallery.nonEmpty === 13, JSON.stringify(gallery));
   check('gallery: chaos game + caffeine + regression content', gallery.sierpinski > 690 && gallery.caffeine === 24 && gallery.regression === 1, JSON.stringify(gallery));
   check('gallery: half-adder labels', gallery.halfAdder.includes('XOR') && gallery.halfAdder.includes('AND'), gallery.halfAdder);
+
+  // A graph node drags its circle, label and incident edges together.
+  const dragGalleryNode = async () => {
+    await page.evaluate(() => {
+      document.documentElement.style.scrollBehavior = 'auto';
+      document.getElementById('stage-hamiltonian-cycle').scrollIntoView({ block: 'center' });
+    });
+    await page.waitForTimeout(250);
+    const before = await page.evaluate(() => {
+      const g = window.__GALLERY;
+      const s = g.scenes[g.examples.indexOf('hamiltonian-cycle')];
+      const svg = s._svg;
+      const c = svg.querySelector('circle');
+      const x = Number(c.getAttribute('cx'));
+      const y = -Number(c.getAttribute('cy'));
+      const client = (wx, wy) => {
+        const p = svg.createSVGPoint();
+        p.x = wx;
+        p.y = -wy;
+        const o = p.matrixTransform(svg.getScreenCTM());
+        return { x: o.x, y: o.y };
+      };
+      return { x, y, from: client(x, y), to: client(x + 55, y + 25) };
+    });
+    await page.mouse.move(before.from.x, before.from.y);
+    await page.mouse.down();
+    await page.mouse.move(before.to.x, before.to.y, { steps: 8 });
+    await page.waitForTimeout(350);
+    await page.mouse.up();
+    await page.waitForTimeout(250);
+    const after = await page.evaluate(() => {
+      const g = window.__GALLERY;
+      const s = g.scenes[g.examples.indexOf('hamiltonian-cycle')];
+      const c = s._svg.querySelector('circle');
+      return { x: Number(c.getAttribute('cx')), y: -Number(c.getAttribute('cy')) };
+    });
+    return { before, after, delta: Math.hypot(after.x - before.x, after.y - before.y) };
+  };
+  const nodeDrag = await dragGalleryNode();
+  check('gallery: graph nodes are draggable', nodeDrag.delta > 30, JSON.stringify(nodeDrag));
+
+  // Procedural cards pan when the background is dragged.
+  await page.evaluate(() => {
+    document.documentElement.style.scrollBehavior = 'auto';
+    document.getElementById('stage-sierpinski').scrollIntoView({ block: 'center' });
+  });
+  await page.waitForTimeout(200);
+  const panBefore = await page.evaluate(() => {
+    const g = window.__GALLERY;
+    const s = g.scenes[g.examples.indexOf('sierpinski')];
+    const r = s._svg.getBoundingClientRect();
+    return { vb: s._svg.getAttribute('viewBox'), x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  });
+  await page.mouse.move(panBefore.x, panBefore.y);
+  await page.mouse.down();
+  await page.mouse.move(panBefore.x + 50, panBefore.y + 25, { steps: 6 });
+  await page.mouse.up();
+  await page.waitForTimeout(200);
+  const panAfter = await page.evaluate(() => {
+    const g = window.__GALLERY;
+    return g.scenes[g.examples.indexOf('sierpinski')]._svg.getAttribute('viewBox');
+  });
+  check('gallery: procedural cards pan on drag', panAfter !== panBefore.vb, panBefore.vb + ' -> ' + panAfter);
   check('gallery: no page errors', pageErrors.length === 0, pageErrors.join(' | '));
 
   console.log(`\n${passes.length} passed, ${failures.length} failed`);

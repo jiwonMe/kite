@@ -186,6 +186,8 @@ export interface SceneOptions {
   width?: number;
   height?: number;
   seed?: number;
+  /** Stage-1 random repulsion warm start (default true). Set false to keep authored coordinates. */
+  warmStart?: boolean;
 }
 
 export function scene(container?: HTMLElement | string, options?: SceneOptions): KiteScene;

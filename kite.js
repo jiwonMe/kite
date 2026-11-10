@@ -1103,7 +1103,7 @@ function kiteWorkerMain() {
         for (let i = 0; i < S.vars.length; i++) {
           if (S.invMass[i] > 0) S.vars[i] += (rand() - 0.5) * 0.05;
         }
-        warmStart(15);
+        if (msg.warmStart !== false) warmStart(15);
         projectInitial();
         self.postMessage({ type: 'READY' });
         break;
@@ -1401,6 +1401,7 @@ class KiteSceneImpl {
     this.width = Number(opts.width) > 0 ? Number(opts.width) : DEFAULTS.width;
     this.height = Number(opts.height) > 0 ? Number(opts.height) : DEFAULTS.height;
     this.seed = (Number(opts.seed) | 0) || DEFAULTS.seed;
+    this.warmStart = opts.warmStart !== false;
 
     this.tape = new Tape();
     this.vars = [];
@@ -2372,6 +2373,7 @@ class KiteSceneImpl {
         width: this.width,
         height: this.height,
         seed: this.seed,
+        warmStart: this.warmStart,
       });
     } else {
       const tapeDelta = this.tape.serialize(this._syncedNodes);
